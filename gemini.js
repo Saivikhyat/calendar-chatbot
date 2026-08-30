@@ -95,7 +95,7 @@ async function chat(userMessage, auth) {
   ];
 
   let response = await groq.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
+    model: 'llama-3.1-8b-instant',
     messages,
     tools,
     tool_choice: 'auto',
@@ -127,7 +127,7 @@ async function chat(userMessage, auth) {
     }
 
     response = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+model: 'openai/gpt-oss-20b',
       messages,
       tools,
       tool_choice: 'auto',

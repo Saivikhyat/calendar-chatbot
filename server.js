@@ -1,9 +1,12 @@
 require('dotenv').config();
-const http = require('http');
-const url = require('url');
+const express = require('express');
+const session = require('express-session');
+const path = require('path');
 const { google } = require('googleapis');
-const readline = require('readline');
 const { chat } = require('./gemini');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -12,90 +15,75 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
-const PORT = 3000;
 
-let authTokens = null;
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'calendar-chatbot-secret',
+  resave: false,
+  saveUninitialized: false,
+}));
 
-async function authenticate() {
-  return new Promise((resolve, reject) => {
-    const authUrl = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: SCOPES,
-      prompt: 'consent',
-    });
-
-    console.log('\n🔐 Open this URL in your browser to authenticate:\n');
-    console.log(authUrl);
-    console.log('\nWaiting for authentication...\n');
-
-    const server = http.createServer(async (req, res) => {
-      const query = url.parse(req.url, true).query;
-      if (query.code) {
-        try {
-          const { tokens } = await oauth2Client.getToken(query.code);
-          oauth2Client.setCredentials(tokens);
-          authTokens = tokens;
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end('<h1>✅ Authentication successful! You can close this tab.</h1>');
-          server.close();
-          resolve();
-        } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'text/html' });
-          res.end('<h1>❌ Authentication failed</h1>');
-          server.close();
-          reject(error);
-        }
-      }
-    });
-
-    server.listen(PORT, () => {
-      console.log(`Local server listening on http://localhost:${PORT}`);
-    });
+app.get('/auth/login', (req, res) => {
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: SCOPES,
+    prompt: 'consent',
   });
-}
+  res.redirect(authUrl);
+});
 
-async function main() {
-  console.log('📅 Calendar Chatbot - Terminal Edition\n');
-
+app.get('/auth/callback', async (req, res) => {
+  const code = req.query.code;
   try {
-    await authenticate();
-    console.log('✅ Authenticated successfully!\n');
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+    req.session.tokens = tokens;
+    req.session.authenticated = true;
+    res.redirect('/');
   } catch (error) {
-    console.error('❌ Authentication failed:', error.message);
-    process.exit(1);
+    console.error('Auth error:', error);
+    res.status(500).send('Authentication failed');
+  }
+});
+
+app.get('/auth/status', (req, res) => {
+  res.json({ authenticated: !!req.session.authenticated });
+});
+
+app.post('/api/chat', async (req, res) => {
+  const { message } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: 'Message is required' });
   }
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Please authenticate with Google first', authUrl: '/auth/login' });
+  }
 
-  const prompt = () => {
-    rl.question('You: ', async (message) => {
-      if (message.toLowerCase() === 'exit' || message.toLowerCase() === 'quit') {
-        console.log('\n👋 Goodbye!');
-        rl.close();
-        process.exit(0);
-      }
+  try {
+    if (!req.session.tokens || !req.session.tokens.access_token) {
+      req.session.authenticated = false;
+      return res.status(401).json({ error: 'Session expired', authUrl: '/auth/login' });
+    }
+    oauth2Client.setCredentials(req.session.tokens);
+    const reply = await chat(message, oauth2Client);
+    res.json({ reply });
+  } catch (error) {
+    console.error('Chat error:', error);
+    if (error.message?.includes('invalid_grant') || error.message?.includes('Token has been expired or revoked')) {
+      req.session.authenticated = false;
+      req.session.tokens = null;
+      return res.status(401).json({ error: 'Token expired', authUrl: '/auth/login' });
+    }
+    res.status(500).json({ error: error.message || 'Failed to process your request' });
+  }
+});
 
-      if (!message.trim()) {
-        prompt();
-        return;
-      }
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-      try {
-        const reply = await chat(message, oauth2Client);
-        console.log(`\nBot: ${reply}\n`);
-      } catch (error) {
-        console.error(`\n❌ Error: ${error.message}\n`);
-      }
-
-      prompt();
-    });
-  };
-
-  console.log('Type your message or "exit" to quit.\n');
-  prompt();
-}
-
-main();
+app.listen(PORT, () => {
+  console.log(`📅 Calendar Chatbot running at http://localhost:${PORT}`);
+});

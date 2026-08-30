@@ -1,7 +1,7 @@
 {
   "name": "calendar-chatbot",
   "version": "1.0.0",
-  "description": "Terminal-based calendar chatbot using Google Calendar API and Gemini AI",
+  "description": "Web-based calendar chatbot using Google Calendar API and Groq AI",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -14,7 +14,7 @@
   "keywords": [
     "calendar",
     "chatbot",
-    "gemini",
+    "groq",
     "google-calendar"
   ],
   "author": "",
@@ -26,6 +26,8 @@
   "homepage": "https://github.com/Saivikhyat/calendar-chatbot#readme",
   "dependencies": {
     "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
     "googleapis": "^176.0.0",
     "groq-sdk": "^1.6.0"
   }

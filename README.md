@@ -1,6 +1,6 @@
 # calendar-chatbot
 
-A terminal-based calendar chatbot powered by Google Calendar API and Groq AI.
+A web-based calendar chatbot powered by Google Calendar API and Groq AI.
 
 ## Installation
 
@@ -35,15 +35,12 @@ npm install
 npm start
 ```
 
-The chatbot will open a browser for Google authentication, then you can chat in the terminal to manage your calendar events.
-
-**Commands:**
-- Type natural language to interact (e.g., "What's on my schedule today?")
-- Type `exit` or `quit` to quit
+Open `http://localhost:3000` in your browser, connect your Google Calendar, and start chatting!
 
 ## Features
 
 - List calendar events
 - Create new events
 - Delete events
-- Natural language interaction via Groq AI (Llama 3.3)
+- Natural language interaction via Groq AI
+- Beautiful, responsive web interface
