@@ -1,6 +1,6 @@
 # calendar-chatbot
 
-A terminal-based calendar chatbot powered by Google Calendar API and Gemini AI.
+A terminal-based calendar chatbot powered by Google Calendar API and Groq AI.
 
 ## Installation
 
@@ -22,10 +22,12 @@ npm install
    GOOGLE_CLIENT_ID=your_client_id
    GOOGLE_CLIENT_SECRET=your_client_secret
    REDIRECT_URI=http://localhost:3000/auth/callback
-   GEMINI_API_KEY=your_gemini_api_key
+   GROQ_API_KEY=your_groq_api_key
    ```
 
 3. Enable Google Calendar API in [Google Cloud Console](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com)
+
+4. Get a Groq API key at [Groq Console](https://console.groq.com/keys)
 
 ## Usage
 
@@ -44,4 +46,4 @@ The chatbot will open a browser for Google authentication, then you can chat in 
 - List calendar events
 - Create new events
 - Delete events
-- Natural language interaction via Gemini AI
+- Natural language interaction via Groq AI (Llama 3.3)

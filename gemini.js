@@ -1,50 +1,55 @@
-const { GoogleGenAI } = require('@google/genai');
+const Groq = require('groq-sdk');
 const { google } = require('googleapis');
 
-const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const tools = [
   {
-    functionDeclarations: [
-      {
-        name: 'listEvents',
-        description: 'List calendar events for a given date range',
-        parameters: {
-          type: 'object',
-          properties: {
-            timeMin: { type: 'string', description: 'Start of time range in ISO 8601 format' },
-            timeMax: { type: 'string', description: 'End of time range in ISO 8601 format' },
-            maxResults: { type: 'integer', description: 'Maximum number of events to return' },
-          },
+    type: 'function',
+    function: {
+      name: 'listEvents',
+      description: 'List calendar events for a given date range',
+      parameters: {
+        type: 'object',
+        properties: {
+          timeMin: { type: 'string', description: 'Start of time range in ISO 8601 format' },
+          timeMax: { type: 'string', description: 'End of time range in ISO 8601 format' },
+          maxResults: { type: 'integer', description: 'Maximum number of events to return' },
         },
       },
-      {
-        name: 'createEvent',
-        description: 'Create a new calendar event',
-        parameters: {
-          type: 'object',
-          properties: {
-            summary: { type: 'string', description: 'Event title' },
-            description: { type: 'string', description: 'Event description' },
-            startDateTime: { type: 'string', description: 'Event start time in ISO 8601 format' },
-            endDateTime: { type: 'string', description: 'Event end time in ISO 8601 format' },
-            location: { type: 'string', description: 'Event location' },
-          },
-          required: ['summary', 'startDateTime', 'endDateTime'],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'createEvent',
+      description: 'Create a new calendar event',
+      parameters: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string', description: 'Event title' },
+          description: { type: 'string', description: 'Event description' },
+          startDateTime: { type: 'string', description: 'Event start time in ISO 8601 format' },
+          endDateTime: { type: 'string', description: 'Event end time in ISO 8601 format' },
+          location: { type: 'string', description: 'Event location' },
         },
+        required: ['summary', 'startDateTime', 'endDateTime'],
       },
-      {
-        name: 'deleteEvent',
-        description: 'Delete a calendar event by its ID',
-        parameters: {
-          type: 'object',
-          properties: {
-            eventId: { type: 'string', description: 'The ID of the event to delete' },
-          },
-          required: ['eventId'],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deleteEvent',
+      description: 'Delete a calendar event by its ID',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string', description: 'The ID of the event to delete' },
         },
+        required: ['eventId'],
       },
-    ],
+    },
   },
 ];
 
@@ -81,47 +86,57 @@ async function deleteEvent(args, auth) {
 }
 
 async function chat(userMessage, auth) {
-  let response = await genai.models.generateContent({
-    model: 'gemini-3.6-flash',
-    contents: [{ role: 'user', parts: [{ text: userMessage }] }],
-    config: {
-      tools,
-      systemInstruction: 'You are a helpful calendar assistant. Help users manage their Google Calendar events by listing, creating, and deleting events. Be concise and friendly.',
+  const messages = [
+    {
+      role: 'system',
+      content: 'You are a helpful calendar assistant. Help users manage their Google Calendar events by listing, creating, and deleting events. Be concise and friendly.',
     },
+    { role: 'user', content: userMessage },
+  ];
+
+  let response = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages,
+    tools,
+    tool_choice: 'auto',
   });
 
-  let functionCalls = response.candidates?.[0]?.content?.parts?.filter(p => p.functionCall) || [];
+  let assistantMessage = response.choices[0].message;
 
-  while (functionCalls.length > 0) {
-    const functionResults = [];
-    for (const fc of functionCalls) {
-      const { name, args: fArgs } = fc.functionCall;
+  while (assistantMessage.tool_calls) {
+    messages.push(assistantMessage);
+
+    for (const toolCall of assistantMessage.tool_calls) {
+      const { name, arguments: argsStr } = toolCall.function;
+      const args = JSON.parse(argsStr);
       let result;
+
       if (name === 'listEvents') {
-        result = await listEvents(fArgs, auth);
+        result = await listEvents(args, auth);
       } else if (name === 'createEvent') {
-        result = await createEvent(fArgs, auth);
+        result = await createEvent(args, auth);
       } else if (name === 'deleteEvent') {
-        result = await deleteEvent(fArgs, auth);
+        result = await deleteEvent(args, auth);
       }
-      functionResults.push({ functionResponse: { name, response: result } });
+
+      messages.push({
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: JSON.stringify(result),
+      });
     }
 
-    response = await genai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: [
-        { role: 'user', parts: [{ text: userMessage }] },
-        { role: 'model', parts: functionCalls.map(fc => ({ functionCall: fc.functionCall })) },
-        { role: 'user', parts: functionResults },
-      ],
-      config: { tools },
+    response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages,
+      tools,
+      tool_choice: 'auto',
     });
 
-    functionCalls = response.candidates?.[0]?.content?.parts?.filter(p => p.functionCall) || [];
+    assistantMessage = response.choices[0].message;
   }
 
-  const textParts = response.candidates?.[0]?.content?.parts?.filter(p => p.text) || [];
-  return textParts.map(p => p.text).join('');
+  return assistantMessage.content;
 }
 
 module.exports = { chat };

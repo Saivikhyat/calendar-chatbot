@@ -11,7 +11,12 @@
     "type": "git",
     "url": "git+https://github.com/Saivikhyat/calendar-chatbot.git"
   },
-  "keywords": ["calendar", "chatbot", "gemini", "google-calendar"],
+  "keywords": [
+    "calendar",
+    "chatbot",
+    "gemini",
+    "google-calendar"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -20,8 +25,8 @@
   },
   "homepage": "https://github.com/Saivikhyat/calendar-chatbot#readme",
   "dependencies": {
-    "@google/genai": "^2.19.0",
     "dotenv": "^17.4.2",
-    "googleapis": "^176.0.0"
+    "googleapis": "^176.0.0",
+    "groq-sdk": "^1.6.0"
   }
 }
