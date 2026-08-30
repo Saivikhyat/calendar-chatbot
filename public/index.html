@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendar Chatbot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #chat-container {
+      height: calc(100vh - 140px);
+    }
+    #chat-messages {
+      height: 100%;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+  <header class="bg-gray-800 shadow-lg p-4 border-b border-gray-700">
+    <div class="max-w-3xl mx-auto flex items-center justify-between">
+      <h1 class="text-xl font-bold text-blue-400">📅 Calendar Chatbot</h1>
+      <div id="auth-status"></div>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col max-w-3xl mx-auto w-full p-4">
+    <div id="chat-container" class="bg-gray-800 rounded-xl shadow-xl border border-gray-700 overflow-hidden flex flex-col">
+      <div id="chat-messages" class="flex-1 p-4 space-y-4">
+        <div class="text-center text-gray-500 py-8" id="welcome-msg">
+          <p class="text-lg">👋 Welcome to Calendar Chatbot</p>
+          <p class="text-sm mt-2">Connect your Google Calendar to get started</p>
+        </div>
+      </div>
+      <div class="p-4 border-t border-gray-700 bg-gray-800">
+        <form id="chat-form" class="flex gap-2">
+          <input
+            type="text"
+            id="message-input"
+            placeholder="Type a message..."
+            class="flex-1 bg-gray-700 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-600"
+            autocomplete="off"
+          />
+          <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
+            id="send-btn"
+          >
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const chatMessages = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const sendBtn = document.getElementById('send-btn');
+    const authStatus = document.getElementById('auth-status');
+    const welcomeMsg = document.getElementById('welcome-msg');
+
+    let authenticated = false;
+
+    async function checkAuth() {
+      try {
+        const res = await fetch('/auth/status');
+        const data = await res.json();
+        authenticated = data.authenticated;
+        if (authenticated) {
+          authStatus.innerHTML = '<span class="text-green-400 text-sm">✓ Connected</span>';
+          welcomeMsg.innerHTML = '<p class="text-lg">✅ Connected to Google Calendar</p><p class="text-sm mt-2">Ask me anything about your calendar!</p>';
+        } else {
+          authStatus.innerHTML = '<a href="/auth/login" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors">Connect Google Calendar</a>';
+          messageInput.disabled = true;
+          sendBtn.disabled = true;
+        }
+      } catch (error) {
+        authStatus.innerHTML = '<span class="text-red-400 text-sm">Error checking auth</span>';
+      }
+    }
+
+    function addMessage(content, isUser) {
+      const div = document.createElement('div');
+      div.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+      div.innerHTML = `
+        <div class="${isUser ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-100'} rounded-xl px-4 py-3 max-w-[80%] shadow-lg">
+          <p class="whitespace-pre-wrap">${escapeHtml(content)}</p>
+        </div>
+      `;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addLoading() {
+      const div = document.createElement('div');
+      div.id = 'loading';
+      div.className = 'flex justify-start';
+      div.innerHTML = `
+        <div class="bg-gray-700 rounded-xl px-4 py-3 shadow-lg">
+          <div class="flex space-x-2">
+            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+          </div>
+        </div>
+      `;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function removeLoading() {
+      const loading = document.getElementById('loading');
+      if (loading) loading.remove();
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const message = messageInput.value.trim();
+      if (!message) return;
+
+      addMessage(message, true);
+      messageInput.value = '';
+      addLoading();
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+        const data = await res.json();
+        removeLoading();
+
+        if (data.authUrl) {
+          window.location.href = data.authUrl;
+          return;
+        }
+
+        addMessage(data.reply || data.error || 'No response', false);
+      } catch (error) {
+        removeLoading();
+        addMessage('Failed to connect to the server', false);
+      }
+    });
+
+    checkAuth();
+  </script>
+</body>
+</html>
