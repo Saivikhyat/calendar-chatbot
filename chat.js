@@ -1,18 +1,17 @@
-// chat.js — Model gateway integration (Tokenrouter / GLM 5.3)
+// chat.js — Groq API integration (Llama 3.3)
 // Handles tool-calling, RRULE recurrence parsing, slot-filling state, and conversation history.
 
-const OpenAI = require('openai');
+const Groq = require('groq-sdk');
 const { google } = require('googleapis');
 
 // ---------------------------------------------------------------------------
-// 1. API Client — Tokenrouter endpoint, GLM 5.3 model
+// 1. API Client — Groq
 // ---------------------------------------------------------------------------
-const client = new OpenAI({
-  apiKey: process.env.TOKENROUTER_API_KEY,
-  baseURL: process.env.TOKENROUTER_BASE_URL || 'https://tokenrouter.me/v1',
+const client = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
-const MODEL = 'glm-5.3';
+const MODEL = 'llama-3.3-70b-versatile';
 const DEFAULT_TIMEZONE = 'America/New_York'; // EST baseline
 
 // ---------------------------------------------------------------------------
