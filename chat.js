@@ -137,10 +137,21 @@ function parseTime(raw) {
  * @returns {string} ISO 8601 datetime
  */
 function toISO(dateStr, time, tz) {
-  // Construct ISO string directly — no Date objects, no local timezone drift.
-  // Google Calendar interprets this as the literal time in the given timezone.
+  // Google Calendar interprets naive ISO datetimes as UTC, so we must convert
+  // the local time to UTC by computing the offset for the given timezone.
   const pad = (n) => String(n).padStart(2, '0');
-  return `${dateStr}T${pad(time.hours)}:${pad(time.minutes)}:00`;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(year, month - 1, day, time.hours, time.minutes, 0));
+  const effectiveTz = tz || DEFAULT_TIMEZONE;
+  const tzDate = new Date(dt.toLocaleString('en-US', { timeZone: effectiveTz }));
+  const utcDate = new Date(dt.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const offsetMs = tzDate - utcDate; // positive = east of UTC (e.g. IST = +5:30)
+  const offsetMin = Math.round(offsetMs / 60000);
+  const sign = offsetMin >= 0 ? '+' : '-';
+  const absMin = Math.abs(offsetMin);
+  const offH = pad(Math.floor(absMin / 60));
+  const offM = pad(absMin % 60);
+  return `${dateStr}T${pad(time.hours)}:${pad(time.minutes)}:00${sign}${offH}:${offM}`;
 }
 
 /**
