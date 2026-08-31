@@ -13,6 +13,7 @@ const client = new OpenAI({
 });
 
 const MODEL = 'glm-5.3';
+const DEFAULT_TIMEZONE = 'America/New_York'; // EST baseline
 
 // ---------------------------------------------------------------------------
 // 2. Slot-Filling State — accumulates extracted fields across turns
@@ -32,6 +33,9 @@ function blankEventState() {
     recurrenceText: null,   // human-readable, e.g. "every Monday"
     location: null,
     description: null,
+    pendingCreate: null,    // args for event creation awaiting conflict confirmation
+    pendingDelete: null,    // { eventId, summary } awaiting delete confirmation
+    pendingUpdate: null,    // args for event update awaiting confirmation
   };
 }
 
@@ -532,7 +536,11 @@ function buildRRule(opts) {
   if (!opts || !opts.freq) return null;
   const parts = [`FREQ=${opts.freq.toUpperCase()}`];
   if (opts.interval && opts.interval > 1) parts.push(`INTERVAL=${opts.interval}`);
-  if (opts.byDay && opts.freq.toUpperCase() === 'WEEKLY') parts.push(`BYDAY=${opts.byDay.toUpperCase()}`);
+  if (opts.byDay) {
+    // For WEEKLY: BYDAY=MO,WE
+    // For MONTHLY/YEARLY: BYDAY=2TU (2nd Tuesday)
+    parts.push(`BYDAY=${opts.byDay.toUpperCase()}`);
+  }
   if (opts.count) parts.push(`COUNT=${opts.count}`);
   else if (opts.until) parts.push(`UNTIL=${opts.until.replace(/-/g, '')}`);
   return parts.join(';');
@@ -541,25 +549,45 @@ function buildRRule(opts) {
 function parseRecurrenceText(text) {
   if (!text) return null;
   const t = text.toLowerCase();
-  if (/\b(daily|every\s*day|each\s*day)\b/.test(t)) return { freq: 'DAILY', interval: 1 };
-  if (/\b(weekly|every\s*week|each\s*week)\b/.test(t)) return { freq: 'WEEKLY', interval: 1 };
-  if (/\b(monthly|every\s*month|each\s*month)\b/.test(t)) return { freq: 'MONTHLY', interval: 1 };
-  if (/\b(yearly|annually|every\s*year|each\s*year)\b/.test(t)) return { freq: 'YEARLY', interval: 1 };
-  const everyN = t.match(/every\s+(\d+)\s+(day|week|month|year)s?/);
-  if (everyN) {
-    const map = { day: 'DAILY', week: 'WEEKLY', month: 'MONTHLY', year: 'YEARLY' };
-    return { freq: map[everyN[2]], interval: parseInt(everyN[1], 10) };
-  }
+
+  // Ordinal mapping for "1st", "2nd", "3rd", "4th", "5th", "last"
+  const ordinalMap = { first: '1', second: '2', third: '3', fourth: '4', fifth: '5', last: '-1' };
   const dayMap = {
     sun: 'SU', sunday: 'SU', mon: 'MO', monday: 'MO', tue: 'TU', tuesday: 'TU',
     wed: 'WE', wednesday: 'WE', thu: 'TH', thursday: 'TH', fri: 'FR', friday: 'FR',
     sat: 'SA', saturday: 'SA',
   };
+
+  // Complex: "2nd Tuesday of month", "3rd Wednesday of every month", "first Monday of each month"
+  const nthDayMatch = t.match(/\b(first|second|third|fourth|fifth|last|1st|2nd|3rd|4th|5th)\b\s+\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b\s+\bof\b\s+(?:each|every|the)?\s*\b(month|year)\b/i);
+  if (nthDayMatch) {
+    let ordinal = ordinalMap[nthDayMatch[1].toLowerCase()] || nthDayMatch[1].replace(/\D/g, '');
+    const dayCode = dayMap[nthDayMatch[2].toLowerCase().slice(0, 3)];
+    const isYearly = /\byear/i.test(t);
+    const freq = isYearly ? 'YEARLY' : 'MONTHLY';
+    return { freq, interval: 1, byDay: `${ordinal}${dayCode}` };
+  }
+
+  // Simple: "every day", "daily"
+  if (/\b(daily|every\s*day|each\s*day)\b/.test(t)) return { freq: 'DAILY', interval: 1 };
+  if (/\b(weekly|every\s*week|each\s*week)\b/.test(t)) return { freq: 'WEEKLY', interval: 1 };
+  if (/\b(monthly|every\s*month|each\s*month)\b/.test(t)) return { freq: 'MONTHLY', interval: 1 };
+  if (/\b(yearly|annually|every\s*year|each\s*year)\b/.test(t)) return { freq: 'YEARLY', interval: 1 };
+
+  // Every N days/weeks/months/years
+  const everyN = t.match(/every\s+(\d+)\s+(day|week|month|year)s?/);
+  if (everyN) {
+    const map = { day: 'DAILY', week: 'WEEKLY', month: 'MONTHLY', year: 'YEARLY' };
+    return { freq: map[everyN[2]], interval: parseInt(everyN[1], 10) };
+  }
+
+  // Day-of-week patterns: "every Monday", "Mondays and Wednesdays"
   const dayMatches = [...t.matchAll(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day)?s?\b/g)];
   if (dayMatches.length > 0) {
     const days = [...new Set(dayMatches.map(m => dayMap[m[1]]))];
     return { freq: 'WEEKLY', interval: 1, byDay: days.join(',') };
   }
+
   if (/\bbiweekly\b/.test(t)) return { freq: 'WEEKLY', interval: 2 };
   if (/\bbimonthly\b/.test(t)) return { freq: 'MONTHLY', interval: 2 };
   return null;
@@ -624,6 +652,31 @@ const tools = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'updateEvent',
+      description: 'Update an existing calendar event. Use for rescheduling or modifying events.',
+      parameters: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string', description: 'The Google Calendar event ID to update' },
+          summary: { type: 'string', description: 'New event title / summary' },
+          description: { type: 'string', description: 'New event description' },
+          location: { type: 'string', description: 'New event location' },
+          startDateTime: { type: 'string', description: 'New start in ISO 8601 format' },
+          endDateTime: { type: 'string', description: 'New end in ISO 8601 format' },
+          timezone: { type: 'string', description: 'IANA timezone' },
+          recurrence: {
+            type: 'object',
+            description: 'New RFC 5545 RRULE (pass empty to remove recurrence).',
+            properties: { rrule: { type: 'string', description: 'Full RRULE string' } },
+          },
+        },
+        required: ['eventId'],
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -643,6 +696,27 @@ async function listEvents(args, auth) {
   return response.data.items || [];
 }
 
+/**
+ * Check for conflicting events in a given time range.
+ * Returns an array of conflicting events.
+ */
+async function checkConflicts(startDateTime, endDateTime, auth, excludeEventId = null) {
+  const calendar = google.calendar({ version: 'v3', auth });
+  const response = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: startDateTime,
+    timeMax: endDateTime,
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+  const events = response.data.items || [];
+  // Exclude the event being modified if rescheduling
+  if (excludeEventId) {
+    return events.filter(e => e.id !== excludeEventId);
+  }
+  return events;
+}
+
 async function createEvent(args, auth) {
   const calendar = google.calendar({ version: 'v3', auth });
 
@@ -654,7 +728,7 @@ async function createEvent(args, auth) {
     if (parsed) rrule = buildRRule({ ...parsed, count: args.recurrenceCount });
   }
 
-  const tz = args.timezone || 'UTC';
+  const tz = args.timezone || DEFAULT_TIMEZONE;
   const event = {
     summary: args.summary,
     description: args.description || '',
@@ -676,6 +750,32 @@ async function deleteEvent(args, auth) {
   return { success: true, message: 'Event deleted successfully' };
 }
 
+async function updateEvent(args, auth) {
+  const calendar = google.calendar({ version: 'v3', auth });
+  const resource = {};
+  if (args.summary) resource.summary = args.summary;
+  if (args.description !== undefined) resource.description = args.description;
+  if (args.location !== undefined) resource.location = args.location;
+  if (args.startDateTime) resource.start = { dateTime: args.startDateTime, timeZone: args.timezone || DEFAULT_TIMEZONE };
+  if (args.endDateTime) resource.end = { dateTime: args.endDateTime, timeZone: args.timezone || DEFAULT_TIMEZONE };
+
+  let rrule = null;
+  if (args.recurrence && args.recurrence.rrule) {
+    rrule = args.recurrence.rrule;
+  } else if (args.recurrenceText) {
+    const parsed = parseRecurrenceText(args.recurrenceText);
+    if (parsed) rrule = buildRRule(parsed);
+  }
+  if (rrule !== null) resource.recurrence = rrule ? ['RRULE:' + rrule] : [];
+
+  const response = await calendar.events.patch({
+    calendarId: 'primary',
+    eventId: args.eventId,
+    resource,
+  });
+  return response.data;
+}
+
 // ---------------------------------------------------------------------------
 // 7. System Prompt — enforces cumulative slot-filling
 // ---------------------------------------------------------------------------
@@ -695,7 +795,6 @@ function buildSystemPrompt(eventState, now, customPrompt = null) {
   if (!hasValue(eventState.title)) missing.push('title');
   if (!hasValue(eventState.startDateTime)) missing.push('start date/time');
   if (!hasValue(eventState.endDateTime)) missing.push('end date/time');
-  if (!hasValue(eventState.timezone)) missing.push('timezone');
 
   const collectedBlock = collected.length > 0
     ? `Collected so far:\n${collected.join('\n')}`
@@ -705,10 +804,8 @@ function buildSystemPrompt(eventState, now, customPrompt = null) {
     ? `Still missing (MUST ask for these): ${missing.join(', ')}`
     : 'All mandatory fields collected.';
 
-  // If the user provided a custom system prompt, use it as the base
-  // and append the slot-filling state so the agent still has context.
   const basePrompt = customPrompt
-    ? `${customPrompt}\n\nYou also have access to calendar tools (listEvents, createEvent, deleteEvent). Use them when the user asks to manage their calendar.`
+    ? `${customPrompt}\n\nYou also have access to calendar tools (listEvents, createEvent, updateEvent, deleteEvent). Use them when the user asks to manage their calendar.`
     : `You are a calendar assistant. You manage the user's Google Calendar via tool calls.`;
 
   return `${basePrompt}
@@ -728,23 +825,42 @@ ${missingBlock}
 5. If the user says "6:30" and a prior turn established "PM", treat it as 6:30 PM — do NOT reinterpret as AM.
 6. Do NOT treat sentence-starting words like "IT", "The", "My" as event titles. These are pronouns/determiners.
 7. ONLY ask for fields in the "Still missing" list. Ask for AT MOST 1-2 missing fields per turn.
-8. When ALL mandatory fields (title, start, end, timezone) are present, IMMEDIATELY call createEvent. Do NOT ask about optional fields (description, location) if they are not provided.
+8. When ALL mandatory fields (title, start, end) are present, IMMEDIATELY call createEvent. Do NOT ask about optional fields (description, location) if they are not provided.
 9. If the user says "that's all" or "no more details" or "just create it" and the mandatory fields are filled, call createEvent immediately.
+
+### TIMEZONE
+- Default timezone is EST (America/New_York) if the user does not specify one.
+- Parse casual timezone mentions: "EST" → America/New_York, "PST" → America/Los_Angeles, "CST" → America/Chicago, "MST" → America/Denver.
+- All times are parsed and output in Eastern Standard Time baseline unless another timezone is specified.
 
 ### RECURRENCE — FULLY SUPPORTED
 The createEvent tool FULLY supports recurring events. The recurrence field accepts RFC 5545 RRULE strings.
-Examples the tool accepts:
+Supported patterns:
+  - Simple: "daily", "weekly", "monthly", "yearly", "every Monday", "Mondays and Wednesdays"
+  - Intervals: "every 2 weeks", "every 3 months"
+  - Nth weekday: "2nd Tuesday of every month", "first Monday of each month", "last Friday of the month"
+  - With end: "weekly until June 2027", "for the next 10 weeks"
+Examples:
   - recurrence: { rrule: "FREQ=WEEKLY;BYDAY=MO,WE,FR" }
-  - recurrence: { rrule: "FREQ=DAILY" }
-  - recurrence: { rrule: "FREQ=MONTHLY;BYMONTHDAY=15" }
+  - recurrence: { rrule: "FREQ=MONTHLY;BYDAY=2TU" } (2nd Tuesday)
   - recurrence: { rrule: "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU" }
   - recurrence: { rrule: "FREQ=WEEKLY;BYDAY=FR;UNTIL=20270620T120000Z" }
 NEVER tell the user that recurrence is unsupported. Always create recurring events when asked.
 
-### TIMEZONE RULE
-- If no timezone was provided by the user, you MUST ask "Which timezone?" before calling createEvent.
-- Common timezone names: America/New_York, America/Chicago, America/Denver, America/Los_Angeles, Europe/London, Asia/Kolkata, UTC.
-- The user may say "EST" → use America/New_York, "PST" → America/Los_Angeles, etc.
+### CONFLICT DETECTION
+The system automatically checks for conflicting events before creating. If a conflict is detected, the user will be asked to confirm. You do NOT need to manually check — the system handles this.
+
+### RESCHEDULING & CANCELLATION
+- To reschedule: use updateEvent with the event ID and new details.
+- To cancel/delete: use deleteEvent with the event ID. The system will ask for user confirmation.
+- To find an event ID: use listEvents to search, then present matching events to the user for selection.
+
+### NATURAL LANGUAGE PARSING
+Parse casual text into structured event data:
+- "meeting tomorrow at 3pm for 1 hour" → title: "Meeting", start: tomorrow 3:00 PM, end: tomorrow 4:00 PM
+- "lunch with Sarah on Friday at noon" → title: "Lunch with Sarah", start: Friday 12:00 PM, end: Friday 1:00 PM
+- If duration not specified, default to 1 hour.
+- If end time not specified, compute from start + duration.
 
 ### CONFIRMATION FORMAT
 When confirming a created event, output:
@@ -846,6 +962,56 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
 
   const now = new Date();
 
+  // ── Step 0: Handle conflict confirmation ──
+  if (eventState.pendingCreate && /\b(yes|yeah|yep|confirm|proceed|do it|go ahead)\b/i.test(userMessage.trim().toLowerCase())) {
+    console.log('[chat] User confirmed after conflict, creating event');
+    const createArgs = eventState.pendingCreate;
+    let result;
+    try {
+      result = await createEvent(createArgs, auth);
+    } catch (err) {
+      result = { error: err.message };
+    }
+    let reply = `Created **${createArgs.summary}**\n`;
+    reply += `Date: ${createArgs.startDateTime} — ${createArgs.endDateTime}\n`;
+    if (createArgs.timezone) reply += `Timezone: ${createArgs.timezone}\n`;
+    if (result.error) reply = `Failed to create event: ${result.error}\n`;
+    else if (result.htmlLink) reply += `[View in Google Calendar](${result.htmlLink})`;
+    return { reply, eventState: blankEventState() };
+  }
+  // If they say no, cancel the pending create
+  if (eventState.pendingCreate && /\b(no|nah|cancel|never mind|nevermind)\b/i.test(userMessage.trim().toLowerCase())) {
+    return { reply: 'OK, event creation cancelled.', eventState: blankEventState() };
+  }
+
+  // ── Handle delete confirmation ──
+  if (eventState.pendingDelete && /\b(yes|yeah|yep|confirm|proceed|do it|go ahead|delete|remove)\b/i.test(userMessage.trim().toLowerCase())) {
+    console.log('[chat] User confirmed delete');
+    try {
+      await deleteEvent({ eventId: eventState.pendingDelete.eventId }, auth);
+      return { reply: `Deleted **${eventState.pendingDelete.summary}**.`, eventState: blankEventState() };
+    } catch (err) {
+      return { reply: `Failed to delete event: ${err.message}`, eventState: blankEventState() };
+    }
+  }
+  if (eventState.pendingDelete && /\b(no|nah|keep|never mind|nevermind|cancel)\b/i.test(userMessage.trim().toLowerCase())) {
+    return { reply: 'OK, event was not deleted.', eventState: blankEventState() };
+  }
+
+  // ── Handle update confirmation ──
+  if (eventState.pendingUpdate && /\b(yes|yeah|yep|confirm|proceed|do it|go ahead)\b/i.test(userMessage.trim().toLowerCase())) {
+    console.log('[chat] User confirmed update');
+    try {
+      const updated = await updateEvent(eventState.pendingUpdate, auth);
+      return { reply: `Updated **${updated.summary || eventState.pendingUpdate.eventId}**.`, eventState: blankEventState() };
+    } catch (err) {
+      return { reply: `Failed to update event: ${err.message}`, eventState: blankEventState() };
+    }
+  }
+  if (eventState.pendingUpdate && /\b(no|nah|cancel|never mind|nevermind)\b/i.test(userMessage.trim().toLowerCase())) {
+    return { reply: 'OK, update cancelled.', eventState: blankEventState() };
+  }
+
   // ── Step 1: Regex extraction (fast path, no API call) ──
   eventState = extractEntities(userMessage, eventState);
 
@@ -925,8 +1091,28 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
         if (name === 'listEvents') {
           result = await listEvents(args, auth);
         } else if (name === 'createEvent') {
-          result = await createEvent(args, auth);
-          eventState = blankEventState();
+          // Check for conflicts before creating
+          if (args.startDateTime && args.endDateTime) {
+            const conflicts = await checkConflicts(args.startDateTime, args.endDateTime, auth);
+            if (conflicts.length > 0) {
+              const conflictList = conflicts.map(e =>
+                `- "${e.summary}" (${e.start.dateTime} — ${e.end.dateTime})`
+              ).join('\n');
+              result = {
+                warning: 'CONFLICT_DETECTED',
+                message: `The following events conflict with your requested time:\n${conflictList}\n\nWould you still like to create this event?`,
+                conflicts,
+              };
+            } else {
+              result = await createEvent(args, auth);
+              eventState = blankEventState();
+            }
+          } else {
+            result = await createEvent(args, auth);
+            eventState = blankEventState();
+          }
+        } else if (name === 'updateEvent') {
+          result = await updateEvent(args, auth);
         } else if (name === 'deleteEvent') {
           result = await deleteEvent(args, auth);
         }
@@ -975,12 +1161,25 @@ async function createEventDirectly(state, auth) {
     summary: state.title,
     startDateTime: state.startDateTime,
     endDateTime: state.endDateTime,
-    timezone: state.timezone || 'UTC',
+    timezone: state.timezone || DEFAULT_TIMEZONE,
   };
   if (state.recurrenceRule) createArgs.recurrence = { rrule: state.recurrenceRule };
   if (state.recurrenceText) createArgs.recurrenceText = state.recurrenceText;
   if (state.location) createArgs.location = state.location;
   if (state.description) createArgs.description = state.description;
+
+  // Check for conflicts before creating
+  const conflicts = await checkConflicts(createArgs.startDateTime, createArgs.endDateTime, auth);
+  if (conflicts.length > 0) {
+    const conflictList = conflicts.map(e =>
+      `- **${e.summary}** (${e.start.dateTime} — ${e.end.dateTime})`
+    ).join('\n');
+    let reply = `⚠️ **Conflict detected!** The following events overlap with your requested time:\n${conflictList}\n\n`;
+    reply += `Would you still like me to create **${state.title}**? (Reply "yes" to proceed)`;
+    // Store the pending event in state so we can confirm later
+    state.pendingCreate = createArgs;
+    return { reply, eventState: state };
+  }
 
   let result;
   try {
