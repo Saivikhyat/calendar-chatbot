@@ -11,7 +11,7 @@ const client = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL = 'qwen/qwen3.8-27b';
 const DEFAULT_TIMEZONE = 'America/New_York'; // EST baseline
 
 // ---------------------------------------------------------------------------
