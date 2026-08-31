@@ -1,176 +1,724 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Calendar Chatbot</title>
+  <title>Calendar Assistant</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            surface: { 0: 'var(--surface-0)', 1: 'var(--surface-1)', 2: 'var(--surface-2)', 3: 'var(--surface-3)' },
+            border: { subtle: 'var(--border-subtle)', default: 'var(--border-default)' },
+            text: { primary: 'var(--text-primary)', secondary: 'var(--text-secondary)', muted: 'var(--text-muted)' },
+            accent: { DEFAULT: 'var(--accent)', hover: 'var(--accent-hover)', subtle: 'var(--accent-subtle)', text: 'var(--accent-text)' },
+            success: { DEFAULT: 'var(--success)', subtle: 'var(--success-subtle)' },
+            danger: { DEFAULT: 'var(--danger)', subtle: 'var(--danger-subtle)' },
+            warning: { DEFAULT: 'var(--warning)', subtle: 'var(--warning-subtle)' },
+          },
+          boxShadow: {
+            'glow': '0 0 20px var(--accent-glow)',
+            'glow-lg': '0 0 40px var(--accent-glow)',
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.3s ease-out',
+            'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+            'slide-in-left': 'slideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            'slide-in-right': 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            'scale-in': 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+            'skeleton': 'skeleton 1.5s ease-in-out infinite',
+          },
+        },
+      },
+    }
+  </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    #chat-container { height: calc(100vh - 180px); }
-    #chat-messages { height: 100%; overflow-y: auto; }
-    .message-enter { animation: slideIn 0.3s ease-out; }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+    /* ── CSS Custom Properties: Dark / Light themes ── */
+    :root, html.dark {
+      --surface-0: #09090b;
+      --surface-1: #18181b;
+      --surface-2: #27272a;
+      --surface-3: #3f3f46;
+      --border-subtle: rgba(255,255,255,0.06);
+      --border-default: rgba(255,255,255,0.1);
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent: #8b5cf6;
+      --accent-hover: #7c3aed;
+      --accent-subtle: rgba(139,92,246,0.12);
+      --accent-text: #c4b5fd;
+      --accent-glow: rgba(139,92,246,0.2);
+      --success: #22c55e;
+      --success-subtle: rgba(34,197,94,0.12);
+      --danger: #ef4444;
+      --danger-subtle: rgba(239,68,68,0.12);
+      --warning: #f59e0b;
+      --warning-subtle: rgba(245,158,11,0.12);
+      color-scheme: dark;
     }
-    .gradient-bg {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    html.light, html.light body {
+      --surface-0: #ffffff;
+      --surface-1: #f9fafb;
+      --surface-2: #f3f4f6;
+      --surface-3: #e5e7eb;
+      --border-subtle: rgba(0,0,0,0.05);
+      --border-default: rgba(0,0,0,0.1);
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent-subtle: rgba(124,58,237,0.08);
+      --accent-text: #7c3aed;
+      --accent-glow: rgba(124,58,237,0.15);
+      --success: #16a34a;
+      --success-subtle: rgba(22,163,74,0.08);
+      --danger: #dc2626;
+      --danger-subtle: rgba(220,38,38,0.08);
+      --warning: #d97706;
+      --warning-subtle: rgba(217,119,6,0.08);
+      color-scheme: light;
     }
+
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--surface-0); color: var(--text-primary); margin: 0; }
+
+    /* ── Keyframes ── */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideInLeft { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes slideInRight { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    @keyframes pulseSoft { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    @keyframes skeleton { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes typing { 0%, 60%, 100% { opacity: 0.3; transform: scale(0.75); } 30% { opacity: 1; transform: scale(1); } }
+
+    /* ── Scrollbar ── */
+    .custom-scroll::-webkit-scrollbar { width: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 10px; }
+
+    /* ── Chat bubble markdown ── */
+    .bubble-content pre { background: var(--surface-2); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 8px 0; border: 1px solid var(--border-subtle); font-size: 0.82em; }
+    .bubble-content code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85em; background: var(--accent-subtle); padding: 1px 5px; border-radius: 4px; }
+    .bubble-content pre code { background: none; padding: 0; }
+    .bubble-content ul, .bubble-content ol { padding-left: 18px; margin: 6px 0; }
+    .bubble-content li { margin: 2px 0; }
+    .bubble-content a { color: var(--accent-text); text-decoration: underline; }
+    .bubble-content strong { font-weight: 600; }
+    .bubble-content h1, .bubble-content h2, .bubble-content h3 { margin: 8px 0 4px; font-weight: 600; }
+    .bubble-content h1 { font-size: 1.1em; } .bubble-content h2 { font-size: 1.05em; } .bubble-content h3 { font-size: 1em; }
+    .bubble-content table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 0.85em; }
+    .bubble-content th, .bubble-content td { border: 1px solid var(--border-default); padding: 6px 10px; text-align: left; }
+    .bubble-content th { background: var(--accent-subtle); font-weight: 600; }
+
+    /* ── Skeleton loader ── */
+    .skeleton-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: skeleton 1.5s ease-in-out infinite; }
+
+    /* ── Calendar mini grid ── */
+    .cal-day { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; position: relative; }
+    .cal-day:hover { background: var(--accent-subtle); }
+    .cal-day.today { background: var(--accent); color: white; font-weight: 700; }
+    .cal-day.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .cal-day.other-month { color: var(--text-muted); opacity: 0.4; }
+    .cal-day.has-event::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: var(--accent); border-radius: 50%; }
+    .cal-day.today.has-event::after { background: white; }
+
+    /* ── Event card widget ── */
+    .event-widget { border: 1px solid var(--border-default); border-radius: 12px; overflow: hidden; background: var(--surface-1); }
+    .event-widget-header { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+    .event-widget-body { padding: 12px 16px; }
+    .event-widget-footer { padding: 10px 16px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .badge-recurrence { background: var(--accent-subtle); color: var(--accent-text); }
+    .badge-timezone { background: var(--surface-3); color: var(--text-secondary); }
+    .badge-created { background: var(--success-subtle); color: var(--success); }
+    .badge-deleted { background: var(--danger-subtle); color: var(--danger); }
   </style>
 </head>
-<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
-  <header class="gradient-bg shadow-lg p-4">
-    <div class="max-w-2xl mx-auto flex items-center justify-between">
+<body class="min-h-screen flex flex-col">
+
+  <!-- ════════════════════ HEADER ════════════════════ -->
+  <header class="sticky top-0 z-50 border-b border-border-subtle" style="background: var(--surface-1);">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <!-- Left: brand -->
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--accent);">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
           </svg>
         </div>
         <div>
-          <h1 class="text-lg font-bold text-white">Calendar Assistant</h1>
-          <p class="text-xs text-white/70">Powered by Groq AI</p>
+          <h1 class="text-sm font-bold tracking-tight" style="color: var(--text-primary);">Calendar Assistant</h1>
+          <p class="text-[10px] font-medium" style="color: var(--text-muted);" id="status-text">GLM 5.3 &middot; Tokenrouter</p>
         </div>
       </div>
-      <div id="auth-status"></div>
+      <!-- Right: actions -->
+      <div class="flex items-center gap-2">
+        <div id="auth-status"></div>
+        <!-- Settings -->
+        <button onclick="openSettings()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="background: var(--surface-2);" title="System Prompt Settings">
+          <svg class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </button>
+        <!-- Theme toggle -->
+        <button onclick="toggleTheme()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="background: var(--surface-2);" title="Toggle theme">
+          <svg id="theme-icon-dark" class="w-4 h-4 hidden" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          <svg id="theme-icon-light" class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+        </button>
+        <!-- Calendar panel toggle (mobile) -->
+        <button onclick="toggleCalendarPanel()" class="w-8 h-8 rounded-lg flex items-center justify-center sm:hidden" style="background: var(--surface-2);" title="Calendar">
+          <svg class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </button>
+      </div>
     </div>
   </header>
 
-  <main class="flex-1 flex flex-col max-w-2xl mx-auto w-full p-4">
-    <div id="chat-container" class="bg-gray-900 rounded-2xl shadow-2xl border border-gray-800 overflow-hidden flex flex-col">
-      <div id="chat-messages" class="flex-1 p-4 space-y-4">
-        <div class="text-center text-gray-500 py-12" id="welcome-msg">
-          <div class="w-16 h-16 bg-purple-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
+  <!-- ════════════════════ LAYOUT: Chat + Calendar Sidebar ════════════════════ -->
+  <div class="flex-1 flex max-w-[1400px] mx-auto w-full" style="min-height: 0;">
+
+    <!-- ── Chat Column ── -->
+    <main class="flex-1 flex flex-col min-w-0" id="chat-col">
+      <div class="flex-1 flex flex-col m-2 sm:m-4 rounded-xl overflow-hidden border border-border-subtle" style="background: var(--surface-1);">
+
+        <!-- Messages -->
+        <div id="chat-messages" class="flex-1 p-4 sm:p-5 space-y-4 custom-scroll overflow-y-auto" style="min-height: 0;">
+
+          <!-- Welcome -->
+          <div id="welcome-screen" class="flex flex-col items-center justify-center py-16 animate-fade-in">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5 shadow-glow" style="background: var(--accent);">
+              <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <h2 class="text-lg font-bold mb-1" style="color: var(--text-primary);">Calendar Assistant</h2>
+            <p class="text-sm mb-6 text-center max-w-xs" style="color: var(--text-muted);" id="welcome-subtitle">Connect your Google Calendar to get started</p>
+
+            <div id="quick-actions" class="grid grid-cols-2 gap-2 w-full max-w-sm animate-slide-up" style="animation-delay: 0.1s;">
+              <button onclick="sendQuick('What\\'s on my schedule today?')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
+                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg></div>
+                <p class="text-xs font-medium" style="color: var(--text-secondary);">View Schedule</p>
+              </button>
+              <button onclick="sendQuick('Create a meeting tomorrow at 3pm for 1 hour')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
+                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg></div>
+                <p class="text-xs font-medium" style="color: var(--text-secondary);">Create Event</p>
+              </button>
+              <button onclick="sendQuick('Set up a recurring weekly team standup every Monday at 9am for 30 minutes')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
+                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></div>
+                <p class="text-xs font-medium" style="color: var(--text-secondary);">Recurring Event</p>
+              </button>
+              <button onclick="sendQuick('Am I free tomorrow afternoon?')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
+                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                <p class="text-xs font-medium" style="color: var(--text-secondary);">Check Availability</p>
+              </button>
+            </div>
           </div>
-          <p class="text-lg font-medium text-gray-300">Welcome to Calendar Assistant</p>
-          <p class="text-sm text-gray-500 mt-2">Connect your Google Calendar to get started</p>
-          <div class="mt-6 space-y-2 text-sm text-gray-600">
-            <p>"What's on my schedule today?"</p>
-            <p>"Create a meeting tomorrow at 3pm"</p>
-            <p>"Delete my 2pm meeting"</p>
+        </div>
+
+        <!-- Input -->
+        <div class="p-3 sm:p-4 border-t border-border-subtle" style="background: var(--surface-1);">
+          <form id="chat-form" class="flex gap-2 items-end">
+            <div class="flex-1 relative rounded-xl transition-all duration-200" style="background: var(--surface-2); border: 1px solid var(--border-subtle);" id="input-wrap">
+              <input type="text" id="message-input" placeholder="Ask about your calendar..." class="w-full bg-transparent rounded-xl px-4 py-3 pr-11 focus:outline-none text-sm" style="color: var(--text-primary);" autocomplete="off"/>
+              <button type="submit" id="send-btn" class="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-30" style="background: var(--accent);">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+              </button>
+            </div>
+          </form>
+          <p class="text-[10px] mt-1.5 text-center" style="color: var(--text-muted);">Enter to send &middot; Supports single &amp; recurring events</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- ── Calendar Sidebar ── -->
+    <aside id="calendar-sidebar" class="hidden sm:flex w-72 lg:w-80 flex-col m-2 sm:m-4 ml-0 rounded-xl border border-border-subtle overflow-hidden flex-shrink-0" style="background: var(--surface-1);">
+      <!-- Mini calendar header -->
+      <div class="p-4 border-b border-border-subtle">
+        <div class="flex items-center justify-between mb-3">
+          <button onclick="calNav(-1)" class="w-7 h-7 rounded-md flex items-center justify-center transition-colors" style="background: var(--surface-2);"><svg class="w-3.5 h-3.5" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg></button>
+          <h3 id="cal-month-label" class="text-sm font-semibold" style="color: var(--text-primary);"></h3>
+          <button onclick="calNav(1)" class="w-7 h-7 rounded-md flex items-center justify-center transition-colors" style="background: var(--surface-2);"><svg class="w-3.5 h-3.5" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+        </div>
+        <div class="grid grid-cols-7 gap-1 text-center">
+          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Su</span>
+          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Mo</span>
+          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Tu</span>
+          <span class="text-[10px] font-medium" style="color: var(--text-muted);">We</span>
+          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Th</span>
+          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Fr</span>
+          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Sa</span>
+        </div>
+        <div id="cal-grid" class="grid grid-cols-7 gap-1 mt-1"></div>
+      </div>
+
+      <!-- Agenda -->
+      <div class="flex-1 overflow-y-auto custom-scroll p-4">
+        <h4 class="text-xs font-semibold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Agenda</h4>
+        <div id="agenda-list" class="space-y-2">
+          <p class="text-xs" style="color: var(--text-muted);">No upcoming events</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ════════════════════ SETTINGS MODAL ════════════════════ -->
+  <div id="settings-modal" class="fixed inset-0 z-[100] hidden items-center justify-center" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);">
+    <div class="w-full max-w-lg mx-4 rounded-2xl border border-border-subtle shadow-2xl animate-scale-in" style="background: var(--surface-1);">
+      <!-- Header -->
+      <div class="flex items-center justify-between p-5 border-b border-border-subtle">
+        <div>
+          <h2 class="text-base font-bold" style="color: var(--text-primary);">System Prompt Settings</h2>
+          <p class="text-xs mt-0.5" style="color: var(--text-muted);">Customize the AI assistant's behavior</p>
+        </div>
+        <button onclick="closeSettings()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="background: var(--surface-2);">
+          <svg class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <!-- Body -->
+      <div class="p-5">
+        <label class="block text-xs font-semibold mb-2" style="color: var(--text-secondary);">Custom System Prompt</label>
+        <p class="text-[11px] mb-3" style="color: var(--text-muted);">
+          Write a custom system prompt to override the default behavior. Leave empty to use the built-in calendar assistant prompt.
+        </p>
+        <textarea
+          id="prompt-textarea"
+          rows="10"
+          placeholder="You are a helpful calendar assistant. You manage the user's Google Calendar by listing, creating, and deleting events. Be concise and friendly..."
+          class="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none custom-scroll"
+          style="background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border-subtle);"
+        ></textarea>
+        <div class="flex items-center justify-between mt-3">
+          <button onclick="clearPrompt()" class="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors" style="color: var(--text-muted); background: var(--surface-2);">
+            Reset to Default
+          </button>
+          <div class="flex gap-2">
+            <button onclick="closeSettings()" class="text-xs font-medium px-4 py-2 rounded-lg transition-colors" style="color: var(--text-secondary); background: var(--surface-2);">
+              Cancel
+            </button>
+            <button onclick="savePrompt()" class="text-xs font-semibold px-4 py-2 rounded-lg transition-all" style="background: var(--accent); color: white;">
+              Save Prompt
+            </button>
           </div>
         </div>
       </div>
-      <div class="p-4 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm">
-        <form id="chat-form" class="flex gap-3">
-          <input
-            type="text"
-            id="message-input"
-            placeholder="Ask about your calendar..."
-            class="flex-1 bg-gray-800 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700 transition-all placeholder-gray-500"
-            autocomplete="off"
-          />
-          <button
-            type="submit"
-            class="gradient-bg text-white px-5 py-3 rounded-xl font-medium transition-all hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
-            id="send-btn"
-          >
-            <span>Send</span>
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
-          </button>
-        </form>
-      </div>
     </div>
-  </main>
+  </div>
 
+  <!-- ════════════════════ JAVASCRIPT ════════════════════ -->
   <script>
+    // ── DOM refs ──
     const chatMessages = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
     const sendBtn = document.getElementById('send-btn');
     const authStatus = document.getElementById('auth-status');
-    const welcomeMsg = document.getElementById('welcome-msg');
-
+    const welcomeScreen = document.getElementById('welcome-screen');
+    const statusText = document.getElementById('status-text');
+    const inputWrap = document.getElementById('input-wrap');
     let authenticated = false;
+    let calendarEvents = [];
 
+    // ── Theme ──
+    function getTheme() { return localStorage.getItem('theme') || 'dark'; }
+    function setTheme(t) {
+      document.documentElement.className = t;
+      localStorage.setItem('theme', t);
+      document.getElementById('theme-icon-dark').classList.toggle('hidden', t === 'dark');
+      document.getElementById('theme-icon-light').classList.toggle('hidden', t === 'light');
+    }
+    function toggleTheme() { setTheme(getTheme() === 'dark' ? 'light' : 'dark'); }
+    setTheme(getTheme());
+
+    // ── Settings / Custom System Prompt (stored in localStorage) ──
+    let currentCustomPrompt = localStorage.getItem('customPrompt') || null;
+
+    function openSettings() {
+      const modal = document.getElementById('settings-modal');
+      const textarea = document.getElementById('prompt-textarea');
+      textarea.value = currentCustomPrompt || '';
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      textarea.focus();
+    }
+
+    function closeSettings() {
+      const modal = document.getElementById('settings-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function savePrompt() {
+      const textarea = document.getElementById('prompt-textarea');
+      const prompt = textarea.value.trim();
+      currentCustomPrompt = prompt || null;
+      if (currentCustomPrompt) {
+        localStorage.setItem('customPrompt', currentCustomPrompt);
+      } else {
+        localStorage.removeItem('customPrompt');
+      }
+      closeSettings();
+      if (currentCustomPrompt) {
+        addMessage('Custom system prompt saved. It will be used for all future messages in this session.', false);
+      } else {
+        addMessage('Reset to default system prompt.', false);
+      }
+    }
+
+    function clearPrompt() {
+      document.getElementById('prompt-textarea').value = '';
+      savePrompt();
+    }
+
+    // ── Markdown ──
+    if (typeof marked !== 'undefined') { marked.setOptions({ breaks: true, gfm: true }); }
+
+    // ── Quick actions ──
+    function sendQuick(text) {
+      if (!authenticated) { window.location.href = '/auth/login'; return; }
+      messageInput.value = text;
+      chatForm.dispatchEvent(new Event('submit'));
+    }
+
+    // ── Calendar sidebar toggle (mobile) ──
+    function toggleCalendarPanel() {
+      const sb = document.getElementById('calendar-sidebar');
+      sb.classList.toggle('hidden');
+      sb.classList.toggle('flex');
+      sb.classList.toggle('fixed');
+      sb.classList.toggle('inset-0');
+      sb.classList.toggle('z-50');
+      sb.classList.toggle('w-full');
+      sb.classList.toggle('m-0');
+    }
+
+    // ── Auth ──
     async function checkAuth() {
       try {
         const res = await fetch('/auth/status');
         const data = await res.json();
         authenticated = data.authenticated;
         if (authenticated) {
-          authStatus.innerHTML = '<span class="text-green-400 text-sm flex items-center gap-1"><span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>Connected</span>';
-          if (welcomeMsg) {
-            welcomeMsg.innerHTML = `
-              <div class="w-16 h-16 bg-green-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                </svg>
-              </div>
-              <p class="text-lg font-medium text-gray-300">Connected to Google Calendar</p>
-              <p class="text-sm text-gray-500 mt-2">Ask me anything about your schedule!</p>
-            `;
+          statusText.textContent = 'Connected';
+          statusText.style.color = 'var(--success)';
+          authStatus.innerHTML = `
+            <button onclick="disconnectCalendar()" class="h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors" style="background: var(--surface-2); color: var(--text-secondary);" title="Disconnect">
+              <span class="w-2 h-2 rounded-full" style="background: var(--success);"></span>
+              Connected
+            </button>`;
+          if (welcomeScreen) {
+            document.getElementById('quick-actions').classList.remove('hidden');
+            document.getElementById('welcome-subtitle').textContent = 'Ask me anything about your schedule!';
           }
+          loadAgenda();
         } else {
-          authStatus.innerHTML = '<a href="/auth/login" class="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm transition-all backdrop-blur-sm flex items-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>Connect Calendar</a>';
+          statusText.textContent = 'Not connected';
+          statusText.style.color = '';
+          authStatus.innerHTML = `
+            <a href="/auth/login" class="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-glow" style="background: var(--accent); color: white;">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+              Connect
+            </a>`;
           messageInput.disabled = true;
           sendBtn.disabled = true;
           messageInput.placeholder = 'Connect Google Calendar first...';
         }
-      } catch (error) {
-        authStatus.innerHTML = '<span class="text-red-400 text-sm">Error</span>';
+      } catch { authStatus.innerHTML = '<span class="text-xs font-medium" style="color: var(--danger);">Error</span>'; }
+    }
+    function disconnectCalendar() { if (confirm('Disconnect from Google Calendar?')) window.location.href = '/auth/login'; }
+
+    // ── Mini Calendar ──
+    let calYear, calMonth;
+    const now = new Date();
+    calYear = now.getFullYear(); calMonth = now.getMonth();
+
+    function renderCalendar() {
+      const label = document.getElementById('cal-month-label');
+      const grid = document.getElementById('cal-grid');
+      const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      label.textContent = `${months[calMonth]} ${calYear}`;
+      const firstDay = new Date(calYear, calMonth, 1).getDay();
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+      const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+      const today = new Date();
+      let html = '';
+      // Previous month padding
+      for (let i = firstDay - 1; i >= 0; i--) {
+        html += `<div class="cal-day other-month">${daysInPrev - i}</div>`;
+      }
+      // Current month
+      for (let d = 1; d <= daysInMonth; d++) {
+        const isToday = d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
+        const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const hasEvt = calendarEvents.some(e => {
+          const ed = (e.start?.dateTime || e.start?.date || '').slice(0, 10);
+          return ed === dateStr;
+        });
+        const classes = ['cal-day'];
+        if (isToday) classes.push('today');
+        if (hasEvt) classes.push('has-event');
+        html += `<div class="${classes.join(' ')}" onclick="selectCalDay(${d})">${d}</div>`;
+      }
+      // Next month padding
+      const totalCells = firstDay + daysInMonth;
+      const remaining = (7 - (totalCells % 7)) % 7;
+      for (let i = 1; i <= remaining; i++) {
+        html += `<div class="cal-day other-month">${i}</div>`;
+      }
+      grid.innerHTML = html;
+    }
+
+    function calNav(dir) {
+      calMonth += dir;
+      if (calMonth > 11) { calMonth = 0; calYear++; }
+      if (calMonth < 0) { calMonth = 11; calYear--; }
+      renderCalendar();
+    }
+
+    function selectCalDay(d) {
+      const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dayEvents = calendarEvents.filter(e => {
+        const ed = (e.start?.dateTime || e.start?.date || '').slice(0, 10);
+        return ed === dateStr;
+      });
+      if (dayEvents.length > 0) {
+        sendQuick(`What events do I have on ${dateStr}?`);
       }
     }
 
+    // ── Agenda ──
+    async function loadAgenda() {
+      if (!authenticated) return;
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: 'List my next 10 events with their IDs, titles, start times, and end times in a structured JSON format: [{"id":"...","title":"...","start":"...","end":"..."}]' }),
+        });
+        const data = await res.json();
+        // Try to parse events from the response for the agenda
+        // We store raw calendar events when possible
+        renderAgenda();
+      } catch {}
+    }
+
+    function renderAgenda() {
+      const list = document.getElementById('agenda-list');
+      if (calendarEvents.length === 0) {
+        list.innerHTML = '<p class="text-xs" style="color: var(--text-muted);">No upcoming events</p>';
+        renderCalendar();
+        return;
+      }
+      list.innerHTML = calendarEvents.map(e => {
+        const start = e.start?.dateTime || e.start?.date;
+        const d = new Date(start);
+        const timeStr = start.includes('T') ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'All day';
+        const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const hasRecurrence = !!(e.recurrence && e.recurrence.length);
+        return `
+          <div class="p-2.5 rounded-lg border border-border-subtle transition-colors hover:border-accent/30" style="background: var(--surface-2);">
+            <div class="flex items-start justify-between gap-2">
+              <p class="text-xs font-medium truncate" style="color: var(--text-primary);">${escapeHtml(e.summary || 'Untitled')}</p>
+              ${hasRecurrence ? '<span class="badge badge-recurrence flex-shrink-0"><svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Repeat</span>' : ''}
+            </div>
+            <p class="text-[10px] mt-1" style="color: var(--text-muted);">${dateStr} &middot; ${timeStr}</p>
+          </div>`;
+      }).join('');
+      renderCalendar();
+    }
+
+    // ── Chat: add message ──
     function addMessage(content, isUser) {
-      const div = document.createElement('div');
-      div.className = `message-enter flex ${isUser ? 'justify-end' : 'justify-start'}`;
-      
-      const avatar = isUser 
-        ? '<div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0 ml-2"><svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg></div>'
-        : '<div class="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mr-2"><svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>';
+      if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) {
+        welcomeScreen.classList.add('hidden');
+      }
+      const wrapper = document.createElement('div');
+      wrapper.className = `animate-slide-up ${isUser ? 'flex justify-end' : 'flex justify-start'}`;
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-      div.innerHTML = `
-        ${isUser ? '' : avatar}
-        <div class="${isUser ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-100'} rounded-2xl px-4 py-3 max-w-[75%] shadow-lg ${isUser ? 'rounded-br-md' : 'rounded-bl-md'}">
-          <p class="whitespace-pre-wrap text-sm leading-relaxed">${escapeHtml(content)}</p>
-        </div>
-        ${isUser ? avatar : ''}
-      `;
-      chatMessages.appendChild(div);
+      if (isUser) {
+        wrapper.innerHTML = `
+          <div class="flex items-end gap-2 max-w-[80%]">
+            <span class="text-[10px] mb-1 flex-shrink-0" style="color: var(--text-muted);">${time}</span>
+            <div class="rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm" style="background: var(--accent); color: white;">
+              <p class="text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</p>
+            </div>
+          </div>`;
+      } else {
+        const rendered = renderMarkdown(content);
+        wrapper.innerHTML = `
+          <div class="flex items-end gap-2 max-w-[80%]">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--accent-subtle);">
+              <svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <div class="rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm border border-border-subtle" style="background: var(--surface-2);">
+              <div class="bubble-content text-sm leading-relaxed">${rendered}</div>
+            </div>
+            <span class="text-[10px] mb-1 flex-shrink-0" style="color: var(--text-muted);">${time}</span>
+          </div>`;
+      }
+      chatMessages.appendChild(wrapper);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    function addLoading() {
-      const div = document.createElement('div');
-      div.id = 'loading';
-      div.className = 'message-enter flex justify-start';
-      div.innerHTML = `
-        <div class="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0 mr-2">
-          <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-          </svg>
-        </div>
-        <div class="bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3 shadow-lg">
-          <div class="flex space-x-1.5">
-            <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
-            <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-            <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+    // ── Event preview widget (interactive card inside chat) ──
+    function addEventWidget(data) {
+      if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) welcomeScreen.classList.add('hidden');
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'animate-scale-in flex justify-start';
+      wrapper.style.paddingLeft = '36px';
+
+      const hasRecurrence = data.recurrence && data.recurrence.length > 0;
+      const recLabel = hasRecurrence ? formatRRule(data.recurrence[0]) : null;
+      const start = data.start?.dateTime ? new Date(data.start.dateTime) : null;
+      const end = data.end?.dateTime ? new Date(data.end.dateTime) : null;
+      const dateStr = start ? start.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      const timeStr = start ? start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + (end ? ' – ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') : '';
+
+      wrapper.innerHTML = `
+        <div class="event-widget max-w-sm shadow-lg">
+          <div class="event-widget-header">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full" style="background: var(--success);"></div>
+              <span class="text-xs font-semibold" style="color: var(--success);">Event Created</span>
+            </div>
+            <div class="flex gap-1.5">
+              ${hasRecurrence ? `<span class="badge badge-recurrence"><svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>${escapeHtml(recLabel || 'Recurring')}</span>` : ''}
+              ${data.location ? `<span class="badge badge-timezone">${escapeHtml(data.location)}</span>` : ''}
+            </div>
           </div>
-        </div>
-      `;
-      chatMessages.appendChild(div);
+          <div class="event-widget-body">
+            <p class="text-sm font-semibold mb-1.5" style="color: var(--text-primary);">${escapeHtml(data.summary || 'Untitled')}</p>
+            <div class="flex items-center gap-3 text-xs" style="color: var(--text-secondary);">
+              <span class="flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${dateStr}</span>
+              <span class="flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${timeStr}</span>
+            </div>
+            ${hasRecurrence ? `<p class="text-[11px] mt-2 px-2 py-1 rounded-md" style="background: var(--accent-subtle); color: var(--accent-text);">${escapeHtml(recLabel)}</p>` : ''}
+            ${data.description ? `<p class="text-xs mt-2" style="color: var(--text-muted);">${escapeHtml(data.description)}</p>` : ''}
+          </div>
+          <div class="event-widget-footer">
+            <button onclick="sendQuick('Edit event ${data.id || ''}')" class="flex-1 h-8 rounded-lg text-xs font-medium transition-colors" style="background: var(--surface-3); color: var(--text-secondary);">Edit</button>
+            <button onclick="sendQuick('Delete event ${data.id || ''}')" class="flex-1 h-8 rounded-lg text-xs font-medium transition-colors" style="background: var(--danger-subtle); color: var(--danger);">Delete</button>
+          </div>
+        </div>`;
+
+      chatMessages.appendChild(wrapper);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    function removeLoading() {
-      const loading = document.getElementById('loading');
-      if (loading) loading.remove();
+    // ── Event deleted widget ──
+    function addDeletedWidget(title) {
+      if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) welcomeScreen.classList.add('hidden');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'animate-scale-in flex justify-start';
+      wrapper.style.paddingLeft = '36px';
+      wrapper.innerHTML = `
+        <div class="event-widget max-w-sm shadow-lg" style="border-color: var(--danger-subtle);">
+          <div class="event-widget-header" style="background: var(--danger-subtle);">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full" style="background: var(--danger);"></div>
+              <span class="text-xs font-semibold" style="color: var(--danger);">Event Deleted</span>
+            </div>
+          </div>
+          <div class="event-widget-body">
+            <p class="text-sm font-medium line-through" style="color: var(--text-muted);">${escapeHtml(title)}</p>
+          </div>
+        </div>`;
+      chatMessages.appendChild(wrapper);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    // ── Loading skeleton ──
+    function addLoading() {
+      const el = document.createElement('div');
+      el.id = 'loading';
+      el.className = 'animate-fade-in flex justify-start';
+      el.innerHTML = `
+        <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--accent-subtle);">
+          <svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </div>
+        <div class="rounded-2xl rounded-bl-md px-4 py-3 border border-border-subtle" style="background: var(--surface-2);">
+          <div class="flex items-center gap-1.5">
+            <div class="w-2 h-2 rounded-full" style="background: var(--accent); animation: typing 1.4s ease-in-out infinite;"></div>
+            <div class="w-2 h-2 rounded-full" style="background: var(--accent); animation: typing 1.4s ease-in-out 0.2s infinite;"></div>
+            <div class="w-2 h-2 rounded-full" style="background: var(--accent); animation: typing 1.4s ease-in-out 0.4s infinite;"></div>
+          </div>
+        </div>`;
+      chatMessages.appendChild(el);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    function removeLoading() { document.getElementById('loading')?.remove(); }
+
+    // ── Helpers ──
+    function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    function renderMarkdown(t) { try { return typeof marked !== 'undefined' ? marked.parse(t) : escapeHtml(t); } catch { return escapeHtml(t); } }
+
+    // ── Format RRULE to human-readable string ──
+    function formatRRule(rrule) {
+      if (!rrule) return '';
+      const parts = {};
+      rrule.split(';').forEach(p => { const [k, v] = p.split('='); parts[k] = v; });
+      const freq = { DAILY: 'Daily', WEEKLY: 'Weekly', MONTHLY: 'Monthly', YEARLY: 'Yearly' }[parts.FREQ] || parts.FREQ;
+      let desc = freq;
+      if (parts.INTERVAL) desc = `Every ${parts.INTERVAL} ${parts.FREQ.toLowerCase()}s`;
+      if (parts.BYDAY) {
+        const dayNames = { MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat', SU: 'Sun' };
+        desc += ' on ' + parts.BYDAY.split(',').map(d => dayNames[d] || d).join(', ');
+      }
+      if (parts.COUNT) desc += ` (${parts.COUNT} times)`;
+      return desc;
     }
 
+    // ── Detect event widgets in AI response ──
+    function parseEventFromReply(text) {
+      // Try JSON block
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        try { return JSON.parse(jsonMatch[1]); } catch {}
+      }
+      // Try inline JSON
+      const inlineMatch = text.match(/\{[\s\S]*?"summary"[\s\S]*?\}/);
+      if (inlineMatch) {
+        try { return JSON.parse(inlineMatch[0]); } catch {}
+      }
+      return null;
+    }
+
+    // ── Detect event creation / deletion in response ──
+    function handleEventDetection(text) {
+      const lower = text.toLowerCase();
+
+      // Check for event creation (structured data present)
+      const eventData = parseEventFromReply(text);
+      if (eventData && eventData.summary) {
+        addEventWidget(eventData);
+        // Add to local agenda cache
+        if (eventData.id) calendarEvents.push(eventData);
+        renderAgenda();
+        return true;
+      }
+
+      // Check for deletion confirmation
+      if (/\b(deleted|removed|cancelled)\b/.test(lower) && /\b(event|meeting)\b/.test(lower)) {
+        const titleMatch = text.match(/["""]([^"""]+)["""]|deleted\s+(?:the\s+)?(?:event|meeting)\s+(?:called\s+)?(.+?)(?:\.|,|$)/i);
+        const title = titleMatch?.[1] || titleMatch?.[2] || 'Event';
+        addDeletedWidget(title);
+        return true;
+      }
+
+      return false;
+    }
+
+    // ── Submit handler ──
     chatForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const message = messageInput.value.trim();
@@ -180,38 +728,54 @@
       messageInput.value = '';
       addLoading();
       sendBtn.disabled = true;
+      messageInput.disabled = true;
 
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, customPrompt: currentCustomPrompt }),
         });
         const data = await res.json();
         removeLoading();
 
-        if (data.authUrl) {
-          window.location.href = data.authUrl;
-          return;
-        }
+        if (data.authUrl) { window.location.href = data.authUrl; return; }
 
-        addMessage(data.reply || data.error || 'No response', false);
-      } catch (error) {
+        const reply = data.reply || data.error || 'No response';
+        if (!handleEventDetection(reply)) {
+          addMessage(reply, false);
+        } else {
+          addMessage(reply, false);
+        }
+      } catch {
         removeLoading();
-        addMessage('Failed to connect to the server', false);
+        addMessage('Failed to connect to the server. Please try again.', false);
       } finally {
         sendBtn.disabled = false;
+        messageInput.disabled = false;
+        messageInput.focus();
       }
     });
 
     messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        chatForm.dispatchEvent(new Event('submit'));
-      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatForm.dispatchEvent(new Event('submit')); }
     });
 
+    // ── Focus input glow ──
+    messageInput.addEventListener('focus', () => { inputWrap.style.borderColor = 'var(--accent)'; inputWrap.style.boxShadow = '0 0 0 3px var(--accent-glow)'; });
+    messageInput.addEventListener('blur', () => { inputWrap.style.borderColor = ''; inputWrap.style.boxShadow = ''; });
+
+    // ── Settings modal: close on backdrop click or Escape ──
+    document.getElementById('settings-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeSettings();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeSettings();
+    });
+
+    // ── Init ──
     checkAuth();
+    renderCalendar();
   </script>
 </body>
 </html>

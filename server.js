@@ -3,7 +3,7 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const { google } = require('googleapis');
-const { chat } = require('./gemini');
+const { chat, blankEventState } = require('./chat');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +40,8 @@ app.get('/auth/callback', async (req, res) => {
     oauth2Client.setCredentials(tokens);
     req.session.tokens = tokens;
     req.session.authenticated = true;
+    req.session.conversationHistory = [];
+    req.session.eventState = blankEventState();
     res.redirect('/');
   } catch (error) {
     console.error('Auth error:', error);
@@ -51,8 +53,18 @@ app.get('/auth/status', (req, res) => {
   res.json({ authenticated: !!req.session.authenticated });
 });
 
+// Reset the slot-filling state for a new event conversation
+app.post('/api/reset', (req, res) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  req.session.eventState = blankEventState();
+  req.session.conversationHistory = [];
+  res.json({ ok: true });
+});
+
 app.post('/api/chat', async (req, res) => {
-  const { message } = req.body;
+  const { message, customPrompt } = req.body;
   if (!message) {
     return res.status(400).json({ error: 'Message is required' });
   }
@@ -67,7 +79,26 @@ app.post('/api/chat', async (req, res) => {
       return res.status(401).json({ error: 'Session expired', authUrl: '/auth/login' });
     }
     oauth2Client.setCredentials(req.session.tokens);
-    const reply = await chat(message, oauth2Client);
+
+    if (!req.session.conversationHistory) {
+      req.session.conversationHistory = [];
+    }
+    if (!req.session.eventState) {
+      req.session.eventState = blankEventState();
+    }
+
+    // Use the custom prompt from the request, or fall back to the session-saved one
+    const prompt = customPrompt || req.session.customPrompt || null;
+
+    const { reply, eventState } = await chat(
+      message,
+      oauth2Client,
+      req.session.conversationHistory,
+      req.session.eventState,
+      prompt,
+    );
+    // Persist the updated slot-filling state back to the session
+    req.session.eventState = eventState;
     res.json({ reply });
   } catch (error) {
     console.error('Chat error:', error);
@@ -85,5 +116,5 @@ app.get('/{*path}', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`📅 Calendar Chatbot running at http://localhost:${PORT}`);
+  console.log(`Calendar Chatbot running at http://localhost:${PORT}`);
 });
