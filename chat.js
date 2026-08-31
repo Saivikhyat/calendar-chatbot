@@ -133,12 +133,10 @@ function parseTime(raw) {
  * @returns {string} ISO 8601 datetime
  */
 function toISO(dateStr, time, tz) {
-  // We construct a Date in the target timezone by appending the time
-  // and relying on the calendar API to handle timezone conversion.
-  // For the tool call, we just produce a clean ISO string.
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setHours(time.hours, time.minutes, 0, 0);
-  return d.toISOString().replace('Z', '');
+  // Construct ISO string directly — no Date objects, no local timezone drift.
+  // Google Calendar interprets this as the literal time in the given timezone.
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${dateStr}T${pad(time.hours)}:${pad(time.minutes)}:00`;
 }
 
 /**
@@ -158,6 +156,118 @@ function extractEntities(userMessage, currentState) {
   const state = { ...currentState };
   const msg = userMessage.trim();
   const lower = msg.toLowerCase();
+
+  // ── 0. Structured field extraction ("Key: Value" pairs) ──
+  //    Handles messages like "Title: SOM AT shift\nTime: Fridays from 6:30 PM..."
+  const structuredFields = {};
+  const fieldPatterns = [
+    { key: 'title',       re: /\btitle\s*:\s*(.+?)(?=(?:\s+(?:time|date|first|repeat|location|description|every|weekly|daily|until|\d{1,2}:\d{2}))|$)/i },
+    { key: 'time',        re: /\btime\s*:\s*(.+?)(?=(?:\s+(?:date|first|repeat|location|description|every|weekly|daily|until))|$)/i },
+    { key: 'date',        re: /\b(?:date|first\s+occurrence)\s*:\s*(.+?)(?=(?:\s+(?:time|repeat|location|description|every|weekly|daily|until))|$)/i },
+    { key: 'repeat',      re: /\b(?:repeat|recurrence|recurring)\s*:\s*(.+?)(?=(?:\s+(?:date|time|location|description))|$)/i },
+    { key: 'location',    re: /\blocation\s*:\s*(.+?)(?=(?:\s+(?:description|time|date|repeat|every|weekly|daily|until))|$)/i },
+    { key: 'description', re: /\bdescription\s*:\s*(.+?)$/i },
+  ];
+  for (const { key, re } of fieldPatterns) {
+    const m = msg.match(re);
+    if (m) {
+      const val = m[1].trim().replace(/\s*\.?\s*$/, '');
+      if (val && !/^(none|n\/a|nothing|no)$/i.test(val)) {
+        structuredFields[key] = val;
+      }
+    }
+  }
+
+  // Apply structured fields to state (only if not already set)
+  if (structuredFields.title && !hasValue(state.title)) {
+    state.title = structuredFields.title.charAt(0).toUpperCase() + structuredFields.title.slice(1);
+  }
+  if (structuredFields.location && !hasValue(state.location)) {
+    state.location = structuredFields.location;
+  }
+  if (structuredFields.description && !hasValue(state.description)) {
+    state.description = structuredFields.description;
+  }
+
+  // ── Parse structured time/date/recurrence fields ──
+  // Structured time: "Fridays from 6:30 PM to 8:30 PM" → extract time range + day recurrence
+  const structTime = structuredFields.time || null;
+  const structDate = structuredFields.date || null;
+  const structRepeat = structuredFields.repeat || null;
+
+  // Parse structured time for time range
+  let structTimeRangeMatch = null;
+  let structSingleTimeMatch = null;
+  if (structTime) {
+    structTimeRangeMatch = structTime.match(
+      /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:-|to|until)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i
+    );
+    if (!structTimeRangeMatch) {
+      structSingleTimeMatch = structTime.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i);
+    }
+    // Also extract day-of-week recurrence from structured time (e.g., "Fridays")
+    if (!hasValue(state.recurrenceRule) && !hasValue(state.recurrenceText)) {
+      const dayMatches = [...structTime.toLowerCase().matchAll(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day)?s?\b/g)];
+      if (dayMatches.length > 0) {
+        const days = [...new Set(dayMatches.map(m => DAY_MAP[m[1]]))];
+        if (days.length > 0) {
+          state.recurrenceRule = `FREQ=WEEKLY;BYDAY=${days.map(d => DAY_RRULE[d]).join(',')}`;
+          state.recurrenceText = `every ${days.map(d => Object.entries(DAY_MAP).find(([,v]) => v === d)?.[0]).join(' and ')}`;
+        }
+      }
+    }
+  }
+
+  // Parse structured date: "Friday, September 4, 2026" → dateRef
+  let structDateRef = null;
+  if (structDate) {
+    const MONTH_RE = 'january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec';
+    const m = structDate.match(new RegExp(`((?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:\\s*,?\\s*\\d{4})?)`, 'i'));
+    if (m) {
+      const parsed = Date.parse(m[1].replace(/(st|nd|rd|th)/gi, ''));
+      if (!isNaN(parsed)) {
+        structDateRef = new Date(parsed).toISOString().slice(0, 10);
+      }
+    }
+    // Also try ISO date
+    if (!structDateRef) {
+      const isoM = structDate.match(/(\d{4}-\d{2}-\d{2})/);
+      if (isoM) structDateRef = isoM[1];
+    }
+    // Also try "next Friday" style
+    if (!structDateRef) {
+      const nextDay = structDate.toLowerCase().match(/\bnext\s+(sun|mon|tue|wed|thu|fri|sat)(?:day)?\b/);
+      if (nextDay) {
+        const targetDow = DAY_MAP[nextDay[1]];
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        let diff = targetDow - d.getDay();
+        if (diff <= 0) diff += 7;
+        d.setDate(d.getDate() + diff);
+        structDateRef = d.toISOString().slice(0, 10);
+      }
+    }
+  }
+
+  // Parse structured repeat: "Weekly on Friday until June 20, 2027" → recurrence rule
+  if (structRepeat && !hasValue(state.recurrenceRule)) {
+    const repeatLower = structRepeat.toLowerCase();
+    const rrule = parseRecurrenceText(repeatLower);
+    if (rrule) {
+      // Check for "until <date>" in the repeat field
+      const untilMatch = repeatLower.match(/until\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,?\s*\d{4})?)/);
+      if (untilMatch) {
+        const parsed = Date.parse(untilMatch[1].replace(/(st|nd|rd|th)/gi, ''));
+        if (!isNaN(parsed)) {
+          const until = new Date(parsed);
+          const untilStr = until.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+          rrule.until = untilStr;
+        }
+      }
+      state.recurrenceRule = buildRRule(rrule);
+      state.recurrenceText = structRepeat;
+    }
+  }
 
   // ── Detect explicit timezone ──
   if (!hasValue(state.timezone)) {
@@ -284,10 +394,12 @@ function extractEntities(userMessage, currentState) {
       dateRef = d.toISOString().slice(0, 10);
     }
 
-    // Explicit date: "on June 15", "on 2025-06-15", "June 15th"
+    // Explicit date: "on June 15", "June 15th", "September 4, 2026"
+    // Requires a month name to avoid false matches like "from 6"
     if (!dateRef) {
+      const MONTH_RE = 'january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec';
       const explicitDate = msg.match(
-        /\b(?:on\s+)?(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,?\s*\d{4})?)\b/i
+        new RegExp(`\\b(?:on\\s+)?((?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:\\s*,?\\s*\\d{4})?)\\b`, 'i')
       );
       if (explicitDate) {
         const parsed = Date.parse(explicitDate[1].replace(/(st|nd|rd|th)/gi, ''));
@@ -304,39 +416,41 @@ function extractEntities(userMessage, currentState) {
   }
 
   // ── Build startDateTime / endDateTime from dateRef + times ──
-  if (!hasValue(state.startDateTime) && dateRef) {
-    if (timeRangeMatch) {
-      const t1 = parseTime(timeRangeMatch[1]);
-      const t2 = parseTime(timeRangeMatch[2]);
+  // Priority: structured fields > natural language matches
+  const bestTimeRange = structTimeRangeMatch || timeRangeMatch;
+  const bestSingleTime = structSingleTimeMatch || singleTimeMatch;
+  const bestDateRef = structDateRef || dateRef;
+
+  if (!hasValue(state.startDateTime) && bestDateRef) {
+    if (bestTimeRange) {
+      const t1 = parseTime(bestTimeRange[1]);
+      const t2 = parseTime(bestTimeRange[2]);
       if (t1) {
-        state.startDateTime = toISO(dateRef, t1, state.timezone);
+        state.startDateTime = toISO(bestDateRef, t1, state.timezone);
         if (t2) {
-          state.endDateTime = toISO(dateRef, t2, state.timezone);
+          state.endDateTime = toISO(bestDateRef, t2, state.timezone);
         }
       }
-    } else if (singleTimeMatch) {
-      const t = parseTime(singleTimeMatch[1]);
+    } else if (bestSingleTime) {
+      const t = parseTime(bestSingleTime[1]);
       if (t) {
-        state.startDateTime = toISO(dateRef, t, state.timezone);
-        // Default end time: start + 1 hour
+        state.startDateTime = toISO(bestDateRef, t, state.timezone);
         const endH = t.hours + 1;
-        state.endDateTime = toISO(dateRef, { hours: endH, minutes: t.minutes }, state.timezone);
+        state.endDateTime = toISO(bestDateRef, { hours: endH, minutes: t.minutes }, state.timezone);
       }
     } else {
-      // Date only, no time → default 9:00 AM - 10:00 AM
-      state.startDateTime = toISO(dateRef, { hours: 9, minutes: 0 }, state.timezone);
-      state.endDateTime = toISO(dateRef, { hours: 10, minutes: 0 }, state.timezone);
+      state.startDateTime = toISO(bestDateRef, { hours: 9, minutes: 0 }, state.timezone);
+      state.endDateTime = toISO(bestDateRef, { hours: 10, minutes: 0 }, state.timezone);
     }
-  } else if (!hasValue(state.startDateTime) && !dateRef && (timeRangeMatch || singleTimeMatch)) {
-    // Time only, no date → assume today
+  } else if (!hasValue(state.startDateTime) && !bestDateRef && (bestTimeRange || bestSingleTime)) {
     const todayStr = today.toISOString().slice(0, 10);
-    if (timeRangeMatch) {
-      const t1 = parseTime(timeRangeMatch[1]);
-      const t2 = parseTime(timeRangeMatch[2]);
+    if (bestTimeRange) {
+      const t1 = parseTime(bestTimeRange[1]);
+      const t2 = parseTime(bestTimeRange[2]);
       if (t1) state.startDateTime = toISO(todayStr, t1, state.timezone);
       if (t2) state.endDateTime = toISO(todayStr, t2, state.timezone);
-    } else if (singleTimeMatch) {
-      const t = parseTime(singleTimeMatch[1]);
+    } else if (bestSingleTime) {
+      const t = parseTime(bestSingleTime[1]);
       if (t) {
         state.startDateTime = toISO(todayStr, t, state.timezone);
         state.endDateTime = toISO(todayStr, { hours: t.hours + 1, minutes: t.minutes }, state.timezone);
@@ -389,7 +503,10 @@ function extractEntities(userMessage, currentState) {
   if (!hasValue(state.location)) {
     const locMatch = msg.match(/\b(?:at|in|location|place|room|venue)[:\s]+([A-Za-z0-9\s,.'-]+?)(?:\.|,|\band\b|$)/i);
     if (locMatch) {
-      state.location = locMatch[1].trim();
+      const loc = locMatch[1].trim();
+      if (loc && !/^(none|n\/a|nothing|no)$/i.test(loc)) {
+        state.location = loc;
+      }
     }
   }
 
@@ -397,7 +514,10 @@ function extractEntities(userMessage, currentState) {
   if (!hasValue(state.description)) {
     const descMatch = msg.match(/\b(?:description|notes?|details?|about|regarding)[:\s]+(.+?)(?:\.|$)/i);
     if (descMatch) {
-      state.description = descMatch[1].trim();
+      const desc = descMatch[1].trim();
+      if (desc && !/^(none|n\/a|nothing|no)$/i.test(desc)) {
+        state.description = desc;
+      }
     }
   }
 
@@ -640,7 +760,76 @@ Current date/time: ${now.toISOString()}`;
 }
 
 // ---------------------------------------------------------------------------
-// 8. Main chat function
+// 8. LLM-based extraction — fallback when regex misses fields
+// ---------------------------------------------------------------------------
+
+const extractionTool = [
+  {
+    type: 'function',
+    function: {
+      name: 'extractEventDetails',
+      description: 'Extract structured event details from the user\'s message. Call this for EVERY user message that mentions creating or scheduling an event.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Event title / summary' },
+          startDateTime: { type: 'string', description: 'Event start in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)' },
+          endDateTime: { type: 'string', description: 'Event end in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)' },
+          timezone: { type: 'string', description: 'IANA timezone (e.g. America/New_York)' },
+          recurrence: { type: 'string', description: 'RFC 5545 RRULE string (e.g. FREQ=WEEKLY;BYDAY=MO)' },
+          recurrenceDescription: { type: 'string', description: 'Human-readable recurrence (e.g. every Monday)' },
+          location: { type: 'string', description: 'Event location' },
+          description: { type: 'string', description: 'Event description or notes' },
+        },
+        required: ['title', 'startDateTime', 'endDateTime'],
+      },
+    },
+  },
+];
+
+/**
+ * Ask the LLM to extract event details from a message.
+ * Returns a partial state object with whatever the LLM could extract.
+ */
+async function llmExtractEvent(userMessage, now) {
+  const prompt = `You are an event detail extractor. Given the user's message, extract event details.
+Current date/time: ${now.toISOString()}
+Today is ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
+
+Rules:
+- For dates like "tomorrow", "next Friday", "September 4" — compute the actual ISO date.
+- For times like "3pm", "6:30 PM" — use 24-hour format in the ISO string.
+- For recurrence like "every Monday", "weekly on Fridays" — generate the RFC 5545 RRULE.
+- For "until June 2027" — add UNTIL=YYYYMMDDT000000Z to the RRULE.
+- If the user gives a duration (e.g. "for 1 hour", "for 30 minutes"), compute endDateTime from start + duration.
+- If no end time is given, default to start + 1 hour.
+- If no timezone is mentioned, leave timezone as null.
+- Title: extract the event name. Ignore words like "create", "add", "schedule", "set up", "meeting", "event".`;
+
+  try {
+    const response = await client.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: userMessage },
+      ],
+      tools: extractionTool,
+      tool_choice: { type: 'function', function: { name: 'extractEventDetails' } },
+      stream: false,
+    });
+
+    const msg = response.choices[0].message;
+    if (msg.tool_calls && msg.tool_calls[0]) {
+      return JSON.parse(msg.tool_calls[0].function.arguments);
+    }
+  } catch (err) {
+    console.error('LLM extraction failed:', err.message);
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// 9. Main chat function
 // ---------------------------------------------------------------------------
 
 /**
@@ -657,47 +846,36 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
 
   const now = new Date();
 
-  // ── Step 1: Extract entities from the user's message and merge ──
+  // ── Step 1: Regex extraction (fast path, no API call) ──
   eventState = extractEntities(userMessage, eventState);
 
-  // ── Step 2: If all mandatory fields are present, bypass the LLM entirely ──
-  //            and create the event directly. This avoids LLM refusals on
-  //            recurrence and other well-formed tool calls.
-  const readyToCreate = allMandatoryFilled(eventState);
-
-  if (readyToCreate) {
-    const createArgs = {
-      summary: eventState.title,
-      startDateTime: eventState.startDateTime,
-      endDateTime: eventState.endDateTime,
-      timezone: eventState.timezone || 'UTC',
-    };
-    if (eventState.recurrenceRule) createArgs.recurrence = { rrule: eventState.recurrenceRule };
-    if (eventState.recurrenceText) createArgs.recurrenceText = eventState.recurrenceText;
-    if (eventState.location) createArgs.location = eventState.location;
-    if (eventState.description) createArgs.description = eventState.description;
-
-    let result;
-    try {
-      result = await createEvent(createArgs, auth);
-    } catch (err) {
-      result = { error: err.message };
-    }
-
-    // Build a confirmation reply
-    let reply = `Created **${eventState.title}**\n`;
-    reply += `Date: ${eventState.startDateTime} — ${eventState.endDateTime}\n`;
-    if (eventState.timezone) reply += `Timezone: ${eventState.timezone}\n`;
-    if (eventState.recurrenceText) reply += `Recurrence: ${eventState.recurrenceText}\n`;
-    if (eventState.location) reply += `Location: ${eventState.location}\n`;
-    if (result.error) reply = `Failed to create event: ${result.error}\n`;
-    else if (result.htmlLink) reply += `[View in Google Calendar](${result.htmlLink})`;
-
-    eventState = blankEventState();
-    return { reply, eventState };
+  // ── Step 2: If regex got all mandatory fields, create directly ──
+  if (allMandatoryFilled(eventState)) {
+    return await createEventDirectly(eventState, auth);
   }
 
-  // ── Step 3: Build system prompt with current state ──
+  // ── Step 3: Regex missed fields — ask LLM to extract ──
+  const extracted = await llmExtractEvent(userMessage, now);
+  if (extracted) {
+    // Merge LLM extraction into state (only fill missing fields)
+    if (!hasValue(eventState.title) && extracted.title) eventState.title = extracted.title;
+    if (!hasValue(eventState.startDateTime) && extracted.startDateTime) eventState.startDateTime = extracted.startDateTime;
+    if (!hasValue(eventState.endDateTime) && extracted.endDateTime) eventState.endDateTime = extracted.endDateTime;
+    if (!hasValue(eventState.timezone) && extracted.timezone) eventState.timezone = extracted.timezone;
+    if (!hasValue(eventState.location) && extracted.location) eventState.location = extracted.location;
+    if (!hasValue(eventState.description) && extracted.description) eventState.description = extracted.description;
+    if (!hasValue(eventState.recurrenceRule) && extracted.recurrence) {
+      eventState.recurrenceRule = extracted.recurrence;
+      eventState.recurrenceText = extracted.recurrenceDescription || extracted.recurrence;
+    }
+
+    // Check again after LLM extraction
+    if (allMandatoryFilled(eventState)) {
+      return await createEventDirectly(eventState, auth);
+    }
+  }
+
+  // ── Step 4: Still missing fields — continue slot-filling conversation ──
   const systemContent = buildSystemPrompt(eventState, now, customPrompt);
 
   const messages = [
@@ -716,7 +894,7 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
 
   let assistantMessage = response.choices[0].message;
 
-  // Agentic tool-calling loop
+  // Agentic tool-calling loop (for listEvents, deleteEvent, or if LLM calls createEvent)
   while (assistantMessage.tool_calls) {
     messages.push(assistantMessage);
 
@@ -769,6 +947,39 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
   }
 
   return { reply, eventState };
+}
+
+/**
+ * Create an event directly from state — bypasses the LLM entirely.
+ */
+async function createEventDirectly(state, auth) {
+  const createArgs = {
+    summary: state.title,
+    startDateTime: state.startDateTime,
+    endDateTime: state.endDateTime,
+    timezone: state.timezone || 'UTC',
+  };
+  if (state.recurrenceRule) createArgs.recurrence = { rrule: state.recurrenceRule };
+  if (state.recurrenceText) createArgs.recurrenceText = state.recurrenceText;
+  if (state.location) createArgs.location = state.location;
+  if (state.description) createArgs.description = state.description;
+
+  let result;
+  try {
+    result = await createEvent(createArgs, auth);
+  } catch (err) {
+    result = { error: err.message };
+  }
+
+  let reply = `Created **${state.title}**\n`;
+  reply += `Date: ${state.startDateTime} — ${state.endDateTime}\n`;
+  if (state.timezone) reply += `Timezone: ${state.timezone}\n`;
+  if (state.recurrenceText) reply += `Recurrence: ${state.recurrenceText}\n`;
+  if (state.location) reply += `Location: ${state.location}\n`;
+  if (result.error) reply = `Failed to create event: ${result.error}\n`;
+  else if (result.htmlLink) reply += `[View in Google Calendar](${result.htmlLink})`;
+
+  return { reply, eventState: blankEventState() };
 }
 
 module.exports = { chat, buildRRule, parseRecurrenceText, extractEntities, blankEventState, hasValue };
