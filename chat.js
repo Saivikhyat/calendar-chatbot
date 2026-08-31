@@ -823,7 +823,7 @@ Rules:
       return JSON.parse(msg.tool_calls[0].function.arguments);
     }
   } catch (err) {
-    console.error('LLM extraction failed:', err.message);
+    console.error('[chat] LLM extraction failed:', err.message);
   }
   return null;
 }
@@ -849,13 +849,25 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
   // ── Step 1: Regex extraction (fast path, no API call) ──
   eventState = extractEntities(userMessage, eventState);
 
+  console.log('[chat] After regex extraction:', {
+    title: eventState.title,
+    start: eventState.startDateTime,
+    end: eventState.endDateTime,
+    tz: eventState.timezone,
+    rrule: eventState.recurrenceRule,
+    allFilled: allMandatoryFilled(eventState),
+  });
+
   // ── Step 2: If regex got all mandatory fields, create directly ──
   if (allMandatoryFilled(eventState)) {
+    console.log('[chat] BYPASS: creating event directly from regex extraction');
     return await createEventDirectly(eventState, auth);
   }
 
   // ── Step 3: Regex missed fields — ask LLM to extract ──
+  console.log('[chat] Regex missed fields, calling LLM extraction...');
   const extracted = await llmExtractEvent(userMessage, now);
+  console.log('[chat] LLM extraction result:', extracted);
   if (extracted) {
     // Merge LLM extraction into state (only fill missing fields)
     if (!hasValue(eventState.title) && extracted.title) eventState.title = extracted.title;
@@ -871,11 +883,17 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
 
     // Check again after LLM extraction
     if (allMandatoryFilled(eventState)) {
+      console.log('[chat] BYPASS: creating event after LLM extraction');
       return await createEventDirectly(eventState, auth);
     }
   }
 
   // ── Step 4: Still missing fields — continue slot-filling conversation ──
+  console.log('[chat] Falling through to LLM conversation. State:', {
+    title: eventState.title,
+    start: eventState.startDateTime,
+    end: eventState.endDateTime,
+  });
   const systemContent = buildSystemPrompt(eventState, now, customPrompt);
 
   const messages = [
