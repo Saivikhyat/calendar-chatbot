@@ -1,7 +1,7 @@
 {
   "name": "calendar-chatbot",
   "version": "1.0.0",
-  "description": "Web-based calendar chatbot using Google Calendar API and Llama 3.3 via Groq",
+  "description": "Web-based calendar chatbot using Google Calendar API and Llama 3.2 via Nvidia NIM",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -15,7 +15,8 @@
     "calendar",
     "chatbot",
     "llama",
-    "groq",
+    "nvidia",
+    "nim",
     "google-calendar"
   ],
   "author": "",
@@ -30,6 +31,6 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "googleapis": "^176.0.0",
-    "groq-sdk": "^1.6.0"
+    "openai": "^7.8.0"
   }
 }

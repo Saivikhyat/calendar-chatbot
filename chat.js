@@ -1,17 +1,18 @@
-// chat.js — Groq API integration (Llama 3.3)
+// chat.js — Nvidia NIM API integration (Llama 3.2 90B)
 // Handles tool-calling, RRULE recurrence parsing, slot-filling state, and conversation history.
 
-const Groq = require('groq-sdk');
+const OpenAI = require('openai');
 const { google } = require('googleapis');
 
 // ---------------------------------------------------------------------------
-// 1. API Client — Groq
+// 1. API Client — Nvidia NIM
 // ---------------------------------------------------------------------------
-const client = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+const client = new OpenAI({
+  apiKey: process.env.NVIDIA_API_KEY,
+  baseURL: 'https://integrate.api.nvidia.com/v1',
 });
 
-const MODEL = 'qwen/qwen3.8-27b';
+const MODEL = 'meta/llama-3.2-90b-vision-instruct';
 const DEFAULT_TIMEZONE = 'America/New_York'; // EST baseline
 
 // ---------------------------------------------------------------------------
