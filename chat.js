@@ -1,18 +1,18 @@
-// chat.js — Nvidia NIM API integration (Llama 3.2 90B)
-// Handles tool-calling, RRULE recurrence parsing, slot-filling state, and conversation history.
+// chat.js — Groq API integration
+// Handles tool-calling, slot-filling state, and conversation history.
 
 const OpenAI = require('openai');
 const { google } = require('googleapis');
 
 // ---------------------------------------------------------------------------
-// 1. API Client — Nvidia NIM
+// 1. API Client — Groq
 // ---------------------------------------------------------------------------
 const client = new OpenAI({
-  apiKey: process.env.NVIDIA_API_KEY,
-  baseURL: 'https://integrate.api.nvidia.com/v1',
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: 'https://api.groq.com/openai/v1',
 });
 
-const MODEL = 'meta/llama-3.2-90b-vision-instruct';
+const MODEL = 'qwen/qwen3.8-27b';
 const DEFAULT_TIMEZONE = 'America/New_York'; // EST baseline
 
 // ---------------------------------------------------------------------------
@@ -29,8 +29,6 @@ function blankEventState() {
     startDateTime: null,
     endDateTime: null,
     timezone: null,
-    recurrenceRule: null,   // raw RRULE string, e.g. "FREQ=WEEKLY;BYDAY=MO"
-    recurrenceText: null,   // human-readable, e.g. "every Monday"
     location: null,
     description: null,
     pendingCreate: null,    // args for event creation awaiting conflict confirmation
@@ -79,10 +77,6 @@ const DAY_MAP = {
   sun: 0, sunday: 0, mon: 1, monday: 1, tue: 2, tuesday: 2,
   wed: 3, wednesday: 3, thu: 4, thursday: 4, fri: 5, friday: 5,
   sat: 6, saturday: 6,
-};
-
-const DAY_RRULE = {
-  0: 'SU', 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA',
 };
 
 // Timezone aliases
@@ -161,10 +155,9 @@ function toISO(dateStr, time, tz) {
  * Extraction strategy:
  *   1. Detect explicit datetime strings ("6:30 PM", "tomorrow at 3pm")
  *   2. Detect timezone mentions ("EST", "in New York time")
- *   3. Detect recurrence ("every Monday", "daily", "weekly")
- *   4. Detect title — last resort, use remaining noun phrase after removing
- *      time/date/timezone/recurrence tokens.
- *   5. Merge: only overwrite a field if the new message provides a value
+ *   3. Detect title — last resort, use remaining noun phrase after removing
+ *      time/date/timezone tokens.
+ *   4. Merge: only overwrite a field if the new message provides a value
  *      for it; otherwise keep the existing state.
  */
 function extractEntities(userMessage, currentState) {
@@ -176,11 +169,10 @@ function extractEntities(userMessage, currentState) {
   //    Handles messages like "Title: SOM AT shift\nTime: Fridays from 6:30 PM..."
   const structuredFields = {};
   const fieldPatterns = [
-    { key: 'title',       re: /\btitle\s*:\s*(.+?)(?=(?:\s+(?:time|date|first|repeat|location|description|every|weekly|daily|until|\d{1,2}:\d{2}))|$)/i },
-    { key: 'time',        re: /\btime\s*:\s*(.+?)(?=(?:\s+(?:date|first|repeat|location|description|every|weekly|daily|until))|$)/i },
-    { key: 'date',        re: /\b(?:date|first\s+occurrence)\s*:\s*(.+?)(?=(?:\s+(?:time|repeat|location|description|every|weekly|daily|until))|$)/i },
-    { key: 'repeat',      re: /\b(?:repeat|recurrence|recurring)\s*:\s*(.+?)(?=(?:\s+(?:date|time|location|description))|$)/i },
-    { key: 'location',    re: /\blocation\s*:\s*(.+?)(?=(?:\s+(?:description|time|date|repeat|every|weekly|daily|until))|$)/i },
+    { key: 'title',       re: /\btitle\s*:\s*(.+?)(?=(?:\s+(?:time|date|first|location|description|every|daily|\d{1,2}:\d{2}))|$)/i },
+    { key: 'time',        re: /\btime\s*:\s*(.+?)(?=(?:\s+(?:date|first|location|description|every|daily))|$)/i },
+    { key: 'date',        re: /\b(?:date|first\s+occurrence)\s*:\s*(.+?)(?=(?:\s+(?:time|location|description|every|daily))|$)/i },
+    { key: 'location',    re: /\blocation\s*:\s*(.+?)(?=(?:\s+(?:description|time|date|every|daily))|$)/i },
     { key: 'description', re: /\bdescription\s*:\s*(.+?)$/i },
   ];
   for (const { key, re } of fieldPatterns) {
@@ -204,86 +196,6 @@ function extractEntities(userMessage, currentState) {
     state.description = structuredFields.description;
   }
 
-  // ── Parse structured time/date/recurrence fields ──
-  // Structured time: "Fridays from 6:30 PM to 8:30 PM" → extract time range + day recurrence
-  const structTime = structuredFields.time || null;
-  const structDate = structuredFields.date || null;
-  const structRepeat = structuredFields.repeat || null;
-
-  // Parse structured time for time range
-  let structTimeRangeMatch = null;
-  let structSingleTimeMatch = null;
-  if (structTime) {
-    structTimeRangeMatch = structTime.match(
-      /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:-|to|until)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i
-    );
-    if (!structTimeRangeMatch) {
-      structSingleTimeMatch = structTime.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i);
-    }
-    // Also extract day-of-week recurrence from structured time (e.g., "Fridays")
-    if (!hasValue(state.recurrenceRule) && !hasValue(state.recurrenceText)) {
-      const dayMatches = [...structTime.toLowerCase().matchAll(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day)?s?\b/g)];
-      if (dayMatches.length > 0) {
-        const days = [...new Set(dayMatches.map(m => DAY_MAP[m[1]]))];
-        if (days.length > 0) {
-          state.recurrenceRule = `FREQ=WEEKLY;BYDAY=${days.map(d => DAY_RRULE[d]).join(',')}`;
-          state.recurrenceText = `every ${days.map(d => Object.entries(DAY_MAP).find(([,v]) => v === d)?.[0]).join(' and ')}`;
-        }
-      }
-    }
-  }
-
-  // Parse structured date: "Friday, September 4, 2026" → dateRef
-  let structDateRef = null;
-  if (structDate) {
-    const MONTH_RE = 'january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec';
-    const m = structDate.match(new RegExp(`((?:${MONTH_RE})\\s+\\d{1,2}(?:st|nd|rd|th)?(?:\\s*,?\\s*\\d{4})?)`, 'i'));
-    if (m) {
-      const parsed = Date.parse(m[1].replace(/(st|nd|rd|th)/gi, ''));
-      if (!isNaN(parsed)) {
-        structDateRef = new Date(parsed).toISOString().slice(0, 10);
-      }
-    }
-    // Also try ISO date
-    if (!structDateRef) {
-      const isoM = structDate.match(/(\d{4}-\d{2}-\d{2})/);
-      if (isoM) structDateRef = isoM[1];
-    }
-    // Also try "next Friday" style
-    if (!structDateRef) {
-      const nextDay = structDate.toLowerCase().match(/\bnext\s+(sun|mon|tue|wed|thu|fri|sat)(?:day)?\b/);
-      if (nextDay) {
-        const targetDow = DAY_MAP[nextDay[1]];
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        let diff = targetDow - d.getDay();
-        if (diff <= 0) diff += 7;
-        d.setDate(d.getDate() + diff);
-        structDateRef = d.toISOString().slice(0, 10);
-      }
-    }
-  }
-
-  // Parse structured repeat: "Weekly on Friday until June 20, 2027" → recurrence rule
-  if (structRepeat && !hasValue(state.recurrenceRule)) {
-    const repeatLower = structRepeat.toLowerCase();
-    const rrule = parseRecurrenceText(repeatLower);
-    if (rrule) {
-      // Check for "until <date>" in the repeat field
-      const untilMatch = repeatLower.match(/until\s+(\w+\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*,?\s*\d{4})?)/);
-      if (untilMatch) {
-        const parsed = Date.parse(untilMatch[1].replace(/(st|nd|rd|th)/gi, ''));
-        if (!isNaN(parsed)) {
-          const until = new Date(parsed);
-          const untilStr = until.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-          rrule.until = untilStr;
-        }
-      }
-      state.recurrenceRule = buildRRule(rrule);
-      state.recurrenceText = structRepeat;
-    }
-  }
-
   // ── Detect explicit timezone ──
   if (!hasValue(state.timezone)) {
     // Check alias map first
@@ -301,78 +213,6 @@ function extractEntities(userMessage, currentState) {
         const cityGuess = tzMatch[1].trim();
         const mapped = TZ_ALIASES[cityGuess];
         if (mapped) state.timezone = mapped;
-      }
-    }
-  }
-
-  // ── Detect recurrence ──
-  if (!hasValue(state.recurrenceRule) && !hasValue(state.recurrenceText)) {
-    // Explicit day patterns: "every monday", "on tuesdays and thursdays"
-    const dayPattern = /\b(?:every|on)\s+(?:each\s+)?((?:sun|mon|tue|wed|thu|fri|sat)(?:day)?s?(?:\s+and\s+(?:sun|mon|tue|wed|thu|fri|sat)(?:day)?s?)*)\b/gi;
-    const dayMatches = [...lower.matchAll(dayPattern)];
-    if (dayMatches.length > 0) {
-      const allDays = dayMatches.flatMap(m => {
-        const dayChunk = m[1];
-        return [...dayChunk.matchAll(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day)?s?\b/gi)]
-          .map(d => DAY_MAP[d[1].toLowerCase()]);
-      });
-      const uniqueDays = [...new Set(allDays)];
-      if (uniqueDays.length > 0) {
-        state.recurrenceRule = `FREQ=WEEKLY;BYDAY=${uniqueDays.map(d => DAY_RRULE[d]).join(',')}`;
-        state.recurrenceText = `every ${uniqueDays.map(d => Object.entries(DAY_MAP).find(([,v]) => v === d)?.[0]).join(' and ')}`;
-      }
-    }
-
-    // "daily" / "every day"
-    if (!hasValue(state.recurrenceRule) && /\b(daily|every\s*day|each\s*day)\b/.test(lower)) {
-      state.recurrenceRule = 'FREQ=DAILY';
-      state.recurrenceText = 'daily';
-    }
-
-    // "weekly" / "every week"
-    if (!hasValue(state.recurrenceRule) && /\b(weekly|every\s*week|each\s*week)\b/.test(lower)) {
-      state.recurrenceRule = 'FREQ=WEEKLY';
-      state.recurrenceText = 'weekly';
-    }
-
-    // "monthly" / "every month"
-    if (!hasValue(state.recurrenceRule) && /\b(monthly|every\s*month|each\s*month)\b/.test(lower)) {
-      state.recurrenceRule = 'FREQ=MONTHLY';
-      state.recurrenceText = 'monthly';
-    }
-
-    // "biweekly" / "every other week"
-    if (!hasValue(state.recurrenceRule) && /\b(biweekly|every\s+other\s+week)\b/.test(lower)) {
-      state.recurrenceRule = 'FREQ=WEEKLY;INTERVAL=2';
-      state.recurrenceText = 'every other week';
-    }
-
-    // "every N weeks/days/months"
-    if (!hasValue(state.recurrenceRule)) {
-      const intervalMatch = lower.match(/\bevery\s+(\d+)\s+(day|week|month|year)s?\b/);
-      if (intervalMatch) {
-        const freqMap = { day: 'DAILY', week: 'WEEKLY', month: 'MONTHLY', year: 'YEARLY' };
-        const unitMap = { day: 'days', week: 'weeks', month: 'months', year: 'years' };
-        state.recurrenceRule = `FREQ=${freqMap[intervalMatch[2]]};INTERVAL=${intervalMatch[1]}`;
-        state.recurrenceText = `every ${intervalMatch[1]} ${unitMap[intervalMatch[2]]}`;
-      }
-    }
-
-    // Count: "for the next N weeks/days"
-    if (hasValue(state.recurrenceRule)) {
-      const countMatch = lower.match(/for\s+the\s+next\s+(\d+)\s+(day|week|month|year)s?\b/);
-      if (countMatch) {
-        state.recurrenceRule += `;COUNT=${countMatch[1]}`;
-      }
-      // Until: "until June 2027", "until 2027-06-17"
-      const untilMatch = lower.match(/until\s+(\w+\s+\d{4}|\d{4}-\d{2}-\d{2})/);
-      if (untilMatch) {
-        const parsed = Date.parse(untilMatch[1]);
-        if (!isNaN(parsed)) {
-          const d = new Date(parsed);
-          const until = d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-          state.recurrenceRule += `;UNTIL=${until}`;
-        }
       }
     }
   }
@@ -540,72 +380,7 @@ function extractEntities(userMessage, currentState) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. RRULE helpers
-// ---------------------------------------------------------------------------
-
-function buildRRule(opts) {
-  if (!opts || !opts.freq) return null;
-  const parts = [`FREQ=${opts.freq.toUpperCase()}`];
-  if (opts.interval && opts.interval > 1) parts.push(`INTERVAL=${opts.interval}`);
-  if (opts.byDay) {
-    // For WEEKLY: BYDAY=MO,WE
-    // For MONTHLY/YEARLY: BYDAY=2TU (2nd Tuesday)
-    parts.push(`BYDAY=${opts.byDay.toUpperCase()}`);
-  }
-  if (opts.count) parts.push(`COUNT=${opts.count}`);
-  else if (opts.until) parts.push(`UNTIL=${opts.until.replace(/-/g, '')}`);
-  return parts.join(';');
-}
-
-function parseRecurrenceText(text) {
-  if (!text) return null;
-  const t = text.toLowerCase();
-
-  // Ordinal mapping for "1st", "2nd", "3rd", "4th", "5th", "last"
-  const ordinalMap = { first: '1', second: '2', third: '3', fourth: '4', fifth: '5', last: '-1' };
-  const dayMap = {
-    sun: 'SU', sunday: 'SU', mon: 'MO', monday: 'MO', tue: 'TU', tuesday: 'TU',
-    wed: 'WE', wednesday: 'WE', thu: 'TH', thursday: 'TH', fri: 'FR', friday: 'FR',
-    sat: 'SA', saturday: 'SA',
-  };
-
-  // Complex: "2nd Tuesday of month", "3rd Wednesday of every month", "first Monday of each month"
-  const nthDayMatch = t.match(/\b(first|second|third|fourth|fifth|last|1st|2nd|3rd|4th|5th)\b\s+\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|sun|mon|tue|wed|thu|fri|sat)\b\s+\bof\b\s+(?:each|every|the)?\s*\b(month|year)\b/i);
-  if (nthDayMatch) {
-    let ordinal = ordinalMap[nthDayMatch[1].toLowerCase()] || nthDayMatch[1].replace(/\D/g, '');
-    const dayCode = dayMap[nthDayMatch[2].toLowerCase().slice(0, 3)];
-    const isYearly = /\byear/i.test(t);
-    const freq = isYearly ? 'YEARLY' : 'MONTHLY';
-    return { freq, interval: 1, byDay: `${ordinal}${dayCode}` };
-  }
-
-  // Simple: "every day", "daily"
-  if (/\b(daily|every\s*day|each\s*day)\b/.test(t)) return { freq: 'DAILY', interval: 1 };
-  if (/\b(weekly|every\s*week|each\s*week)\b/.test(t)) return { freq: 'WEEKLY', interval: 1 };
-  if (/\b(monthly|every\s*month|each\s*month)\b/.test(t)) return { freq: 'MONTHLY', interval: 1 };
-  if (/\b(yearly|annually|every\s*year|each\s*year)\b/.test(t)) return { freq: 'YEARLY', interval: 1 };
-
-  // Every N days/weeks/months/years
-  const everyN = t.match(/every\s+(\d+)\s+(day|week|month|year)s?/);
-  if (everyN) {
-    const map = { day: 'DAILY', week: 'WEEKLY', month: 'MONTHLY', year: 'YEARLY' };
-    return { freq: map[everyN[2]], interval: parseInt(everyN[1], 10) };
-  }
-
-  // Day-of-week patterns: "every Monday", "Mondays and Wednesdays"
-  const dayMatches = [...t.matchAll(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day)?s?\b/g)];
-  if (dayMatches.length > 0) {
-    const days = [...new Set(dayMatches.map(m => dayMap[m[1]]))];
-    return { freq: 'WEEKLY', interval: 1, byDay: days.join(',') };
-  }
-
-  if (/\bbiweekly\b/.test(t)) return { freq: 'WEEKLY', interval: 2 };
-  if (/\bbimonthly\b/.test(t)) return { freq: 'MONTHLY', interval: 2 };
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// 5. Tool definitions
+// 4. Tool definitions
 // ---------------------------------------------------------------------------
 const tools = [
   {
@@ -627,7 +402,7 @@ const tools = [
     type: 'function',
     function: {
       name: 'createEvent',
-      description: 'Create a new calendar event. Supports single and recurring events.',
+      description: 'Create a new calendar event.',
       parameters: {
         type: 'object',
         properties: {
@@ -637,13 +412,6 @@ const tools = [
           startDateTime: { type: 'string', description: 'Event start in ISO 8601 format' },
           endDateTime: { type: 'string', description: 'Event end in ISO 8601 format' },
           timezone: { type: 'string', description: 'IANA timezone (e.g. America/New_York)' },
-          recurrence: {
-            type: 'object',
-            description: 'RFC 5545 RRULE for recurring events.',
-            properties: { rrule: { type: 'string', description: 'Full RRULE string' } },
-          },
-          recurrenceText: { type: 'string', description: 'Natural-language recurrence description' },
-          recurrenceCount: { type: 'integer', description: 'Total occurrences for recurrence' },
         },
         required: ['summary', 'startDateTime', 'endDateTime'],
       },
@@ -678,11 +446,6 @@ const tools = [
           startDateTime: { type: 'string', description: 'New start in ISO 8601 format' },
           endDateTime: { type: 'string', description: 'New end in ISO 8601 format' },
           timezone: { type: 'string', description: 'IANA timezone' },
-          recurrence: {
-            type: 'object',
-            description: 'New RFC 5545 RRULE (pass empty to remove recurrence).',
-            properties: { rrule: { type: 'string', description: 'Full RRULE string' } },
-          },
         },
         required: ['eventId'],
       },
@@ -731,25 +494,24 @@ async function checkConflicts(startDateTime, endDateTime, auth, excludeEventId =
 async function createEvent(args, auth) {
   const calendar = google.calendar({ version: 'v3', auth });
 
-  let rrule = null;
-  if (args.recurrence && args.recurrence.rrule) {
-    rrule = args.recurrence.rrule;
-  } else if (args.recurrenceText) {
-    const parsed = parseRecurrenceText(args.recurrenceText);
-    if (parsed) rrule = buildRRule({ ...parsed, count: args.recurrenceCount });
-  }
-
   const tz = args.timezone || DEFAULT_TIMEZONE;
+  const isAllDay = args.allDay || (!args.startDateTime.includes('T'));
+  
   const event = {
     summary: args.summary,
     description: args.description || '',
     location: args.location || '',
-    start: { dateTime: args.startDateTime, timeZone: tz },
-    end: { dateTime: args.endDateTime, timeZone: tz },
   };
-  // Google Calendar API requires the "RRULE:" prefix on each recurrence string.
-  // See: https://developers.google.com/calendar/api/v3/reference/events/insert
-  if (rrule) event.recurrence = ['RRULE:' + rrule];
+
+  if (isAllDay) {
+    // All-day event: use date format (YYYY-MM-DD)
+    event.start = { date: args.startDateTime.split('T')[0] };
+    event.end = { date: args.endDateTime.split('T')[0] };
+  } else {
+    // Timed event: use dateTime format
+    event.start = { dateTime: args.startDateTime, timeZone: tz };
+    event.end = { dateTime: args.endDateTime, timeZone: tz };
+  }
 
   const response = await calendar.events.insert({ calendarId: 'primary', resource: event });
   return response.data;
@@ -770,15 +532,6 @@ async function updateEvent(args, auth) {
   if (args.startDateTime) resource.start = { dateTime: args.startDateTime, timeZone: args.timezone || DEFAULT_TIMEZONE };
   if (args.endDateTime) resource.end = { dateTime: args.endDateTime, timeZone: args.timezone || DEFAULT_TIMEZONE };
 
-  let rrule = null;
-  if (args.recurrence && args.recurrence.rrule) {
-    rrule = args.recurrence.rrule;
-  } else if (args.recurrenceText) {
-    const parsed = parseRecurrenceText(args.recurrenceText);
-    if (parsed) rrule = buildRRule(parsed);
-  }
-  if (rrule !== null) resource.recurrence = rrule ? ['RRULE:' + rrule] : [];
-
   const response = await calendar.events.patch({
     calendarId: 'primary',
     eventId: args.eventId,
@@ -798,7 +551,6 @@ function buildSystemPrompt(eventState, now, customPrompt = null) {
   if (hasValue(eventState.startDateTime)) collected.push(`- Start: ${eventState.startDateTime}`);
   if (hasValue(eventState.endDateTime)) collected.push(`- End: ${eventState.endDateTime}`);
   if (hasValue(eventState.timezone)) collected.push(`- Timezone: ${eventState.timezone}`);
-  if (hasValue(eventState.recurrenceRule)) collected.push(`- Recurrence: ${eventState.recurrenceRule} (${eventState.recurrenceText || ''})`);
   if (hasValue(eventState.location)) collected.push(`- Location: ${eventState.location}`);
   if (hasValue(eventState.description)) collected.push(`- Description: ${eventState.description}`);
 
@@ -844,20 +596,6 @@ ${missingBlock}
 - Parse casual timezone mentions: "EST" → America/New_York, "PST" → America/Los_Angeles, "CST" → America/Chicago, "MST" → America/Denver.
 - All times are parsed and output in Eastern Standard Time baseline unless another timezone is specified.
 
-### RECURRENCE — FULLY SUPPORTED
-The createEvent tool FULLY supports recurring events. The recurrence field accepts RFC 5545 RRULE strings.
-Supported patterns:
-  - Simple: "daily", "weekly", "monthly", "yearly", "every Monday", "Mondays and Wednesdays"
-  - Intervals: "every 2 weeks", "every 3 months"
-  - Nth weekday: "2nd Tuesday of every month", "first Monday of each month", "last Friday of the month"
-  - With end: "weekly until June 2027", "for the next 10 weeks"
-Examples:
-  - recurrence: { rrule: "FREQ=WEEKLY;BYDAY=MO,WE,FR" }
-  - recurrence: { rrule: "FREQ=MONTHLY;BYDAY=2TU" } (2nd Tuesday)
-  - recurrence: { rrule: "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU" }
-  - recurrence: { rrule: "FREQ=WEEKLY;BYDAY=FR;UNTIL=20270620T120000Z" }
-NEVER tell the user that recurrence is unsupported. Always create recurring events when asked.
-
 ### CONFLICT DETECTION
 The system automatically checks for conflicting events before creating. If a conflict is detected, the user will be asked to confirm. You do NOT need to manually check — the system handles this.
 
@@ -877,7 +615,6 @@ Parse casual text into structured event data:
 When confirming a created event, output:
 - Event title
 - Date & time (formatted nicely)
-- Recurrence (if any, e.g. "Every Monday at 9:00 AM")
 - Timezone
 - Location (if any)
 
@@ -903,8 +640,6 @@ const extractionTool = [
           startDateTime: { type: 'string', description: 'Event start in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)' },
           endDateTime: { type: 'string', description: 'Event end in ISO 8601 format (YYYY-MM-DDTHH:MM:SS)' },
           timezone: { type: 'string', description: 'IANA timezone (e.g. America/New_York)' },
-          recurrence: { type: 'string', description: 'RFC 5545 RRULE string (e.g. FREQ=WEEKLY;BYDAY=MO)' },
-          recurrenceDescription: { type: 'string', description: 'Human-readable recurrence (e.g. every Monday)' },
           location: { type: 'string', description: 'Event location' },
           description: { type: 'string', description: 'Event description or notes' },
         },
@@ -926,8 +661,6 @@ Today is ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', m
 Rules:
 - For dates like "tomorrow", "next Friday", "September 4" — compute the actual ISO date.
 - For times like "3pm", "6:30 PM" — use 24-hour format in the ISO string.
-- For recurrence like "every Monday", "weekly on Fridays" — generate the RFC 5545 RRULE.
-- For "until June 2027" — add UNTIL=YYYYMMDDT000000Z to the RRULE.
 - If the user gives a duration (e.g. "for 1 hour", "for 30 minutes"), compute endDateTime from start + duration.
 - If no end time is given, default to start + 1 hour.
 - If no timezone is mentioned, leave timezone as null.
@@ -972,8 +705,83 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
   if (!eventState) eventState = blankEventState();
 
   const now = new Date();
+  const lower = userMessage.trim().toLowerCase();
 
-  // ── Step 0: Handle conflict confirmation ──
+  // ── Step 0a: Handle schedule queries (list events) ──
+  const isScheduleQuery = /\b(schedule|events|calendar|availability|free|busy|booked|upcoming|what'?s?\s+on|show\s+me|list\s+my|what\s+do\s+i\s+have|what\s+am\s+i)\b/i.test(lower)
+    && !/\b(create|add|make|set|book|plan|schedule\s+a|new)\b/i.test(lower);
+
+  if (isScheduleQuery) {
+    console.log('[chat] Schedule query detected');
+    // Determine time range
+    let timeMin = new Date(now);
+    let timeMax = new Date(now);
+
+    if (/\b(today)\b/.test(lower)) {
+      timeMax.setHours(23, 59, 59, 999);
+    } else if (/\b(tomorrow)\b/.test(lower)) {
+      timeMin = new Date(now);
+      timeMin.setDate(timeMin.getDate() + 1);
+      timeMin.setHours(0, 0, 0, 0);
+      timeMax = new Date(timeMin);
+      timeMax.setHours(23, 59, 59, 999);
+    } else if (/\b(this\s+week|coming\s+week|next\s+7|next\s+week|week)\b/.test(lower)) {
+      timeMax.setDate(timeMax.getDate() + 7);
+      timeMax.setHours(23, 59, 59, 999);
+    } else if (/\b(tomorrow\s+afternoon|this\s+afternoon)\b/.test(lower)) {
+      timeMin.setHours(12, 0, 0, 0);
+      timeMax.setHours(23, 59, 59, 999);
+    } else if (/\b(this\s+morning|tomorrow\s+morning)\b/.test(lower)) {
+      timeMin.setHours(0, 0, 0, 0);
+      timeMax.setHours(12, 0, 0, 0);
+    } else if (/\b(this\s+evening|tomorrow\s+evening)\b/.test(lower)) {
+      timeMin.setHours(17, 0, 0, 0);
+      timeMax.setHours(23, 59, 59, 999);
+    } else {
+      // Default: next 7 days
+      timeMax.setDate(timeMax.getDate() + 7);
+      timeMax.setHours(23, 59, 59, 999);
+    }
+
+    const timeMinISO = timeMin.toISOString();
+    const timeMaxISO = timeMax.toISOString();
+
+    console.log('[chat] Listing events from', timeMinISO, 'to', timeMaxISO);
+
+    let events;
+    try {
+      events = await listEvents({ timeMin: timeMinISO, timeMax: timeMaxISO, maxResults: 20 }, auth);
+    } catch (err) {
+      return { reply: `Failed to fetch events: ${err.message}`, eventState };
+    }
+
+    if (!events || events.length === 0) {
+      const rangeLabel = /\b(today)\b/.test(lower) ? 'today' :
+        /\b(tomorrow)\b/.test(lower) ? 'tomorrow' :
+        /\b(this\s+week|coming\s+week|next\s+week|week)\b/.test(lower) ? 'the next 7 days' : 'this period';
+      return { reply: `You have no events scheduled for ${rangeLabel}.`, eventState };
+    }
+
+    // Format events
+    const lines = events.map(e => {
+      const start = e.start?.dateTime || e.start?.date;
+      const d = new Date(start);
+      const dateStr = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+      const timeStr = start.includes('T') ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'All day';
+      const end = e.end?.dateTime ? new Date(e.end.dateTime) : null;
+      const endStr = end && e.end.dateTime.includes('T') ? ' – ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      return `- **${e.summary || 'Untitled'}** — ${dateStr}, ${timeStr}${endStr}`;
+    });
+
+    const rangeLabel = /\b(today)\b/.test(lower) ? 'Today' :
+      /\b(tomorrow)\b/.test(lower) ? 'Tomorrow' :
+      /\b(this\s+week|coming\s+week|next\s+week|week)\b/.test(lower) ? 'Next 7 Days' : 'Upcoming';
+
+    const reply = `**${rangeLabel}** (${events.length} event${events.length > 1 ? 's' : ''}):\n\n${lines.join('\n')}`;
+    return { reply, eventState };
+  }
+
+  // ── Step 0b: Handle conflict confirmation ──
   if (eventState.pendingCreate && /\b(yes|yeah|yep|confirm|proceed|do it|go ahead)\b/i.test(userMessage.trim().toLowerCase())) {
     console.log('[chat] User confirmed after conflict, creating event');
     const createArgs = eventState.pendingCreate;
@@ -1031,7 +839,6 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
     start: eventState.startDateTime,
     end: eventState.endDateTime,
     tz: eventState.timezone,
-    rrule: eventState.recurrenceRule,
     allFilled: allMandatoryFilled(eventState),
   });
 
@@ -1053,10 +860,6 @@ async function chat(userMessage, auth, conversationHistory = [], eventState = nu
     if (!hasValue(eventState.timezone) && extracted.timezone) eventState.timezone = extracted.timezone;
     if (!hasValue(eventState.location) && extracted.location) eventState.location = extracted.location;
     if (!hasValue(eventState.description) && extracted.description) eventState.description = extracted.description;
-    if (!hasValue(eventState.recurrenceRule) && extracted.recurrence) {
-      eventState.recurrenceRule = extracted.recurrence;
-      eventState.recurrenceText = extracted.recurrenceDescription || extracted.recurrence;
-    }
 
     // Check again after LLM extraction
     if (allMandatoryFilled(eventState)) {
@@ -1174,8 +977,6 @@ async function createEventDirectly(state, auth) {
     endDateTime: state.endDateTime,
     timezone: state.timezone || DEFAULT_TIMEZONE,
   };
-  if (state.recurrenceRule) createArgs.recurrence = { rrule: state.recurrenceRule };
-  if (state.recurrenceText) createArgs.recurrenceText = state.recurrenceText;
   if (state.location) createArgs.location = state.location;
   if (state.description) createArgs.description = state.description;
 
@@ -1202,7 +1003,6 @@ async function createEventDirectly(state, auth) {
   let reply = `Created **${state.title}**\n`;
   reply += `Date: ${state.startDateTime} — ${state.endDateTime}\n`;
   if (state.timezone) reply += `Timezone: ${state.timezone}\n`;
-  if (state.recurrenceText) reply += `Recurrence: ${state.recurrenceText}\n`;
   if (state.location) reply += `Location: ${state.location}\n`;
   if (result.error) reply = `Failed to create event: ${result.error}\n`;
   else if (result.htmlLink) reply += `[View in Google Calendar](${result.htmlLink})`;
@@ -1210,4 +1010,4 @@ async function createEventDirectly(state, auth) {
   return { reply, eventState: blankEventState() };
 }
 
-module.exports = { chat, buildRRule, parseRecurrenceText, extractEntities, blankEventState, hasValue };
+module.exports = { chat, extractEntities, blankEventState, hasValue };

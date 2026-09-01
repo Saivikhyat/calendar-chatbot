@@ -36,18 +36,19 @@
             'scale-in': 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
             'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
             'skeleton': 'skeleton 1.5s ease-in-out infinite',
+            'float': 'float 6s ease-in-out infinite',
+            'glow-pulse': 'glowPulse 3s ease-in-out infinite',
           },
         },
       },
     }
   </script>
   <style>
-    /* ── CSS Custom Properties: Dark / Light themes ── */
     :root, html.dark {
       --surface-0: #09090b;
-      --surface-1: #18181b;
-      --surface-2: #27272a;
-      --surface-3: #3f3f46;
+      --surface-1: #131316;
+      --surface-2: #1c1c21;
+      --surface-3: #2a2a32;
       --border-subtle: rgba(255,255,255,0.06);
       --border-default: rgba(255,255,255,0.1);
       --text-primary: #fafafa;
@@ -55,27 +56,29 @@
       --text-muted: #71717a;
       --accent: #8b5cf6;
       --accent-hover: #7c3aed;
-      --accent-subtle: rgba(139,92,246,0.12);
+      --accent-subtle: rgba(139,92,246,0.1);
       --accent-text: #c4b5fd;
-      --accent-glow: rgba(139,92,246,0.2);
+      --accent-glow: rgba(139,92,246,0.25);
       --success: #22c55e;
       --success-subtle: rgba(34,197,94,0.12);
       --danger: #ef4444;
       --danger-subtle: rgba(239,68,68,0.12);
       --warning: #f59e0b;
       --warning-subtle: rgba(245,158,11,0.12);
+      --gradient-start: #8b5cf6;
+      --gradient-end: #06b6d4;
       color-scheme: dark;
     }
     html.light, html.light body {
       --surface-0: #ffffff;
-      --surface-1: #f9fafb;
-      --surface-2: #f3f4f6;
-      --surface-3: #e5e7eb;
-      --border-subtle: rgba(0,0,0,0.05);
+      --surface-1: #f8fafc;
+      --surface-2: #f1f5f9;
+      --surface-3: #e2e8f0;
+      --border-subtle: rgba(0,0,0,0.06);
       --border-default: rgba(0,0,0,0.1);
-      --text-primary: #111827;
-      --text-secondary: #6b7280;
-      --text-muted: #9ca3af;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
       --accent: #7c3aed;
       --accent-hover: #6d28d9;
       --accent-subtle: rgba(124,58,237,0.08);
@@ -87,224 +90,301 @@
       --danger-subtle: rgba(220,38,38,0.08);
       --warning: #d97706;
       --warning-subtle: rgba(217,119,6,0.08);
+      --gradient-start: #7c3aed;
+      --gradient-end: #0891b2;
       color-scheme: light;
     }
 
     * { box-sizing: border-box; }
     body { font-family: 'Inter', system-ui, sans-serif; background: var(--surface-0); color: var(--text-primary); margin: 0; }
 
-    /* ── Keyframes ── */
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes slideInLeft { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
-    @keyframes slideInRight { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
-    @keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideInLeft { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes slideInRight { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     @keyframes pulseSoft { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
     @keyframes skeleton { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     @keyframes typing { 0%, 60%, 100% { opacity: 0.3; transform: scale(0.75); } 30% { opacity: 1; transform: scale(1); } }
+    @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-20px) rotate(2deg); } }
+    @keyframes glowPulse { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+    @keyframes orbSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 
-    /* ── Scrollbar ── */
     .custom-scroll::-webkit-scrollbar { width: 5px; }
     .custom-scroll::-webkit-scrollbar-track { background: transparent; }
     .custom-scroll::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 10px; }
 
-    /* ── Chat bubble markdown ── */
-    .bubble-content pre { background: var(--surface-2); border-radius: 8px; padding: 12px; overflow-x: auto; margin: 8px 0; border: 1px solid var(--border-subtle); font-size: 0.82em; }
-    .bubble-content code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85em; background: var(--accent-subtle); padding: 1px 5px; border-radius: 4px; }
+    .bubble-content pre { background: var(--surface-0); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 10px 0; border: 1px solid var(--border-subtle); font-size: 0.82em; }
+    .bubble-content code { font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85em; background: var(--accent-subtle); padding: 2px 6px; border-radius: 5px; }
     .bubble-content pre code { background: none; padding: 0; }
-    .bubble-content ul, .bubble-content ol { padding-left: 18px; margin: 6px 0; }
-    .bubble-content li { margin: 2px 0; }
-    .bubble-content a { color: var(--accent-text); text-decoration: underline; }
+    .bubble-content ul, .bubble-content ol { padding-left: 20px; margin: 8px 0; }
+    .bubble-content li { margin: 3px 0; }
+    .bubble-content a { color: var(--accent-text); text-decoration: underline; text-decoration-color: var(--accent-subtle); text-underline-offset: 2px; }
     .bubble-content strong { font-weight: 600; }
-    .bubble-content h1, .bubble-content h2, .bubble-content h3 { margin: 8px 0 4px; font-weight: 600; }
-    .bubble-content h1 { font-size: 1.1em; } .bubble-content h2 { font-size: 1.05em; } .bubble-content h3 { font-size: 1em; }
-    .bubble-content table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 0.85em; }
-    .bubble-content th, .bubble-content td { border: 1px solid var(--border-default); padding: 6px 10px; text-align: left; }
+    .bubble-content h1, .bubble-content h2, .bubble-content h3 { margin: 10px 0 6px; font-weight: 700; }
+    .bubble-content h1 { font-size: 1.15em; } .bubble-content h2 { font-size: 1.05em; } .bubble-content h3 { font-size: 1em; }
+    .bubble-content table { border-collapse: collapse; margin: 10px 0; width: 100%; font-size: 0.85em; border-radius: 8px; overflow: hidden; }
+    .bubble-content th, .bubble-content td { border: 1px solid var(--border-default); padding: 8px 12px; text-align: left; }
     .bubble-content th { background: var(--accent-subtle); font-weight: 600; }
 
-    /* ── Skeleton loader ── */
     .skeleton-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: skeleton 1.5s ease-in-out infinite; }
 
-    /* ── Calendar mini grid ── */
-    .cal-day { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; position: relative; }
-    .cal-day:hover { background: var(--accent-subtle); }
-    .cal-day.today { background: var(--accent); color: white; font-weight: 700; }
+    .cal-day { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); position: relative; }
+    .cal-day:hover { background: var(--accent-subtle); transform: scale(1.1); }
+    .cal-day.today { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: white; font-weight: 700; box-shadow: 0 2px 8px var(--accent-glow); }
     .cal-day.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
-    .cal-day.other-month { color: var(--text-muted); opacity: 0.4; }
+    .cal-day.other-month { color: var(--text-muted); opacity: 0.3; }
     .cal-day.has-event::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: var(--accent); border-radius: 50%; }
     .cal-day.today.has-event::after { background: white; }
 
-    /* ── Event card widget ── */
-    .event-widget { border: 1px solid var(--border-default); border-radius: 12px; overflow: hidden; background: var(--surface-1); }
-    .event-widget-header { padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
-    .event-widget-body { padding: 12px 16px; }
-    .event-widget-footer { padding: 10px 16px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; }
-    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .event-widget { border: 1px solid var(--border-default); border-radius: 16px; overflow: hidden; background: var(--surface-1); box-shadow: 0 4px 24px rgba(0,0,0,0.15); }
+    .event-widget-header { padding: 14px 18px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between; }
+    .event-widget-body { padding: 14px 18px; }
+    .event-widget-footer { padding: 12px 18px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
     .badge-recurrence { background: var(--accent-subtle); color: var(--accent-text); }
     .badge-timezone { background: var(--surface-3); color: var(--text-secondary); }
     .badge-created { background: var(--success-subtle); color: var(--success); }
     .badge-deleted { background: var(--danger-subtle); color: var(--danger); }
+
+    .glass { backdrop-filter: blur(20px) saturate(1.2); -webkit-backdrop-filter: blur(20px) saturate(1.2); }
+    .glass-border { border: 1px solid var(--border-subtle); }
+
+    .orb-container { position: absolute; width: 280px; height: 280px; pointer-events: none; }
+    .orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.4; animation: orbSpin 20s linear infinite; }
+    .orb-1 { width: 200px; height: 200px; background: var(--gradient-start); top: -60px; left: -40px; animation-duration: 25s; }
+    .orb-2 { width: 160px; height: 160px; background: var(--gradient-end); bottom: -40px; right: -20px; animation-duration: 18s; animation-direction: reverse; }
+
+    .quick-action-card {
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .quick-action-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--accent-subtle), transparent);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .quick-action-card:hover::before { opacity: 1; }
+    .quick-action-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+
+    .chat-input-wrapper {
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .chat-input-wrapper:focus-within {
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 16px rgba(0,0,0,0.1);
+      border-color: var(--accent) !important;
+    }
+
+    .header-gradient {
+      background: linear-gradient(180deg, var(--surface-1) 0%, var(--surface-1) 100%);
+    }
+    .header-gradient::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-subtle), transparent);
+    }
+
+    .sidebar-gradient {
+      background: linear-gradient(180deg, var(--surface-1) 0%, var(--surface-0) 100%);
+    }
+
+    .btn-ghost {
+      transition: all 0.2s ease;
+    }
+    .btn-ghost:hover {
+      background: var(--surface-2);
+      transform: scale(1.05);
+    }
+    .btn-ghost:active {
+      transform: scale(0.95);
+    }
+
+    .chat-bubble-user {
+      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+
+    .chat-bubble-assistant {
+      background: var(--surface-2);
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
-  <!-- ════════════════════ HEADER ════════════════════ -->
-  <header class="sticky top-0 z-50 border-b border-border-subtle" style="background: var(--surface-1);">
-    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-      <!-- Left: brand -->
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--accent);">
-          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+  <!-- HEADER -->
+  <header class="sticky top-0 z-50 header-gradient glass" style="border-bottom: 1px solid var(--border-subtle);">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3.5">
+        <div class="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg" style="background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));">
+          <svg class="w-4.5 h-4.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
           </svg>
         </div>
         <div>
           <h1 class="text-sm font-bold tracking-tight" style="color: var(--text-primary);">Calendar Assistant</h1>
-          <p class="text-[10px] font-medium" style="color: var(--text-muted);" id="status-text">GLM 5.3 &middot; Tokenrouter</p>
+          <p class="text-[10px] font-medium flex items-center gap-1.5" style="color: var(--text-muted);" id="status-text">
+            <span class="inline-block w-1.5 h-1.5 rounded-full" style="background: var(--accent); animation: pulseSoft 2s infinite;"></span>
+            Qwen 3.8 27B &middot; Groq
+          </p>
         </div>
       </div>
-      <!-- Right: actions -->
       <div class="flex items-center gap-2">
         <div id="auth-status"></div>
-        <!-- Settings -->
-        <button onclick="openSettings()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="background: var(--surface-2);" title="System Prompt Settings">
+        <button onclick="openSettings()" class="w-9 h-9 rounded-xl btn-ghost flex items-center justify-center" title="System Prompt Settings">
           <svg class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         </button>
-        <!-- Theme toggle -->
-        <button onclick="toggleTheme()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="background: var(--surface-2);" title="Toggle theme">
+        <button onclick="toggleTheme()" class="w-9 h-9 rounded-xl btn-ghost flex items-center justify-center" title="Toggle theme">
           <svg id="theme-icon-dark" class="w-4 h-4 hidden" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
           <svg id="theme-icon-light" class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
         </button>
-        <!-- Calendar panel toggle (mobile) -->
-        <button onclick="toggleCalendarPanel()" class="w-8 h-8 rounded-lg flex items-center justify-center sm:hidden" style="background: var(--surface-2);" title="Calendar">
+        <button onclick="toggleCalendarPanel()" class="w-9 h-9 rounded-xl btn-ghost flex items-center justify-center sm:hidden" title="Calendar">
           <svg class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- ════════════════════ LAYOUT: Chat + Calendar Sidebar ════════════════════ -->
+  <!-- LAYOUT -->
   <div class="flex-1 flex max-w-[1400px] mx-auto w-full" style="min-height: 0;">
 
-    <!-- ── Chat Column ── -->
+    <!-- Chat Column -->
     <main class="flex-1 flex flex-col min-w-0" id="chat-col">
-      <div class="flex-1 flex flex-col m-2 sm:m-4 rounded-xl overflow-hidden border border-border-subtle" style="background: var(--surface-1);">
+      <div class="flex-1 flex flex-col m-2 sm:m-4 rounded-2xl overflow-hidden glass-border" style="background: var(--surface-1); box-shadow: 0 4px 32px rgba(0,0,0,0.12);">
 
         <!-- Messages -->
-        <div id="chat-messages" class="flex-1 p-4 sm:p-5 space-y-4 custom-scroll overflow-y-auto" style="min-height: 0;">
+        <div id="chat-messages" class="flex-1 p-4 sm:p-6 space-y-5 custom-scroll overflow-y-auto" style="min-height: 0;">
 
           <!-- Welcome -->
-          <div id="welcome-screen" class="flex flex-col items-center justify-center py-16 animate-fade-in">
-            <div class="w-14 h-14 rounded-xl flex items-center justify-center mb-5 shadow-glow" style="background: var(--accent);">
-              <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-              </svg>
+          <div id="welcome-screen" class="flex flex-col items-center justify-center py-16 animate-fade-in relative">
+            <!-- Ambient orbs -->
+            <div class="orb-container" style="top: -40px; left: 50%; transform: translateX(-50%);">
+              <div class="orb orb-1"></div>
+              <div class="orb orb-2"></div>
             </div>
-            <h2 class="text-lg font-bold mb-1" style="color: var(--text-primary);">Calendar Assistant</h2>
-            <p class="text-sm mb-6 text-center max-w-xs" style="color: var(--text-muted);" id="welcome-subtitle">Connect your Google Calendar to get started</p>
 
-            <div id="quick-actions" class="grid grid-cols-2 gap-2 w-full max-w-sm animate-slide-up" style="animation-delay: 0.1s;">
-              <button onclick="sendQuick('What\\'s on my schedule today?')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
-                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg></div>
-                <p class="text-xs font-medium" style="color: var(--text-secondary);">View Schedule</p>
-              </button>
-              <button onclick="sendQuick('Create a meeting tomorrow at 3pm for 1 hour')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
-                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg></div>
-                <p class="text-xs font-medium" style="color: var(--text-secondary);">Create Event</p>
-              </button>
-              <button onclick="sendQuick('Set up a recurring weekly team standup every Monday at 9am for 30 minutes')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
-                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></div>
-                <p class="text-xs font-medium" style="color: var(--text-secondary);">Recurring Event</p>
-              </button>
-              <button onclick="sendQuick('Am I free tomorrow afternoon?')" class="text-left p-3 rounded-xl border border-border-subtle transition-all hover:border-accent/40 hover:shadow-glow" style="background: var(--surface-2);">
-                <div class="w-7 h-7 rounded-md flex items-center justify-center mb-2" style="background: var(--accent-subtle);"><svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-                <p class="text-xs font-medium" style="color: var(--text-secondary);">Check Availability</p>
-              </button>
+            <div class="relative z-10 flex flex-col items-center">
+              <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-lg" style="background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); animation: glowPulse 3s ease-in-out infinite;">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <h2 class="text-xl font-bold mb-1.5" style="color: var(--text-primary);">Calendar Assistant</h2>
+              <p class="text-sm mb-8 text-center max-w-xs leading-relaxed" style="color: var(--text-muted);" id="welcome-subtitle">Connect your Google Calendar to get started</p>
+
+              <div id="quick-actions" class="grid grid-cols-2 gap-3 w-full max-w-sm animate-slide-up" style="animation-delay: 0.1s;">
+                <button onclick="sendQuick('Show me my schedule for the coming week')" class="quick-action-card text-left p-4 rounded-2xl glass-border" style="background: var(--surface-2);">
+                  <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: linear-gradient(135deg, var(--accent-subtle), transparent); border: 1px solid var(--border-subtle);"><svg class="w-4 h-4" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg></div>
+                  <p class="text-xs font-semibold" style="color: var(--text-primary);">View Schedule</p>
+                  <p class="text-[10px] mt-0.5" style="color: var(--text-muted);">This week's events</p>
+                </button>
+                <button onclick="sendQuick('Create a meeting tomorrow at 3pm for 1 hour')" class="quick-action-card text-left p-4 rounded-2xl glass-border" style="background: var(--surface-2);">
+                  <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: linear-gradient(135deg, var(--accent-subtle), transparent); border: 1px solid var(--border-subtle);"><svg class="w-4 h-4" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg></div>
+                  <p class="text-xs font-semibold" style="color: var(--text-primary);">Create Event</p>
+                  <p class="text-[10px] mt-0.5" style="color: var(--text-muted);">Schedule something new</p>
+                </button>
+                <button onclick="sendQuick('Am I free tomorrow afternoon?')" class="quick-action-card text-left p-4 rounded-2xl glass-border" style="background: var(--surface-2);">
+                  <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: linear-gradient(135deg, var(--accent-subtle), transparent); border: 1px solid var(--border-subtle);"><svg class="w-4 h-4" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                  <p class="text-xs font-semibold" style="color: var(--text-primary);">Check Availability</p>
+                  <p class="text-[10px] mt-0.5" style="color: var(--text-muted);">Find open slots</p>
+                </button>
+                <button onclick="sendQuick('Delete my last event')" class="quick-action-card text-left p-4 rounded-2xl glass-border" style="background: var(--surface-2);">
+                  <div class="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style="background: linear-gradient(135deg, var(--danger-subtle), transparent); border: 1px solid var(--border-subtle);"><svg class="w-4 h-4" style="color: var(--danger);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></div>
+                  <p class="text-xs font-semibold" style="color: var(--text-primary);">Delete Event</p>
+                  <p class="text-[10px] mt-0.5" style="color: var(--text-muted);">Remove from calendar</p>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Input -->
-        <div class="p-3 sm:p-4 border-t border-border-subtle" style="background: var(--surface-1);">
-          <form id="chat-form" class="flex gap-2 items-end">
-            <div class="flex-1 relative rounded-xl transition-all duration-200" style="background: var(--surface-2); border: 1px solid var(--border-subtle);" id="input-wrap">
-              <input type="text" id="message-input" placeholder="Ask about your calendar..." class="w-full bg-transparent rounded-xl px-4 py-3 pr-11 focus:outline-none text-sm" style="color: var(--text-primary);" autocomplete="off"/>
-              <button type="submit" id="send-btn" class="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-30" style="background: var(--accent);">
+        <div class="p-3 sm:p-4 border-t" style="border-color: var(--border-subtle); background: var(--surface-1);">
+          <form id="chat-form" class="flex gap-2.5 items-end">
+            <div class="flex-1 relative rounded-2xl chat-input-wrapper" style="background: var(--surface-2); border: 1.5px solid var(--border-subtle);" id="input-wrap">
+              <input type="text" id="message-input" placeholder="Ask about your calendar..." class="w-full bg-transparent rounded-2xl px-5 py-3.5 pr-12 focus:outline-none text-sm" style="color: var(--text-primary);" autocomplete="off"/>
+              <button type="submit" id="send-btn" class="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 shadow-lg" style="background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));">
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
               </button>
             </div>
           </form>
-          <p class="text-[10px] mt-1.5 text-center" style="color: var(--text-muted);">Enter to send &middot; Supports single &amp; recurring events</p>
+          <p class="text-[10px] mt-2 text-center" style="color: var(--text-muted);">Press Enter to send</p>
         </div>
       </div>
     </main>
 
-    <!-- ── Calendar Sidebar ── -->
-    <aside id="calendar-sidebar" class="hidden sm:flex w-72 lg:w-80 flex-col m-2 sm:m-4 ml-0 rounded-xl border border-border-subtle overflow-hidden flex-shrink-0" style="background: var(--surface-1);">
-      <!-- Mini calendar header -->
-      <div class="p-4 border-b border-border-subtle">
+    <!-- Calendar Sidebar -->
+    <aside id="calendar-sidebar" class="hidden sm:flex w-72 lg:w-80 flex-col m-2 sm:m-4 ml-0 rounded-2xl sidebar-gradient glass-border overflow-hidden flex-shrink-0" style="box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+      <div class="p-4 border-b" style="border-color: var(--border-subtle);">
         <div class="flex items-center justify-between mb-3">
-          <button onclick="calNav(-1)" class="w-7 h-7 rounded-md flex items-center justify-center transition-colors" style="background: var(--surface-2);"><svg class="w-3.5 h-3.5" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg></button>
-          <h3 id="cal-month-label" class="text-sm font-semibold" style="color: var(--text-primary);"></h3>
-          <button onclick="calNav(1)" class="w-7 h-7 rounded-md flex items-center justify-center transition-colors" style="background: var(--surface-2);"><svg class="w-3.5 h-3.5" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+          <button onclick="calNav(-1)" class="w-8 h-8 rounded-xl btn-ghost flex items-center justify-center"><svg class="w-3.5 h-3.5" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg></button>
+          <h3 id="cal-month-label" class="text-sm font-bold" style="color: var(--text-primary);"></h3>
+          <button onclick="calNav(1)" class="w-8 h-8 rounded-xl btn-ghost flex items-center justify-center"><svg class="w-3.5 h-3.5" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
         </div>
         <div class="grid grid-cols-7 gap-1 text-center">
-          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Su</span>
-          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Mo</span>
-          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Tu</span>
-          <span class="text-[10px] font-medium" style="color: var(--text-muted);">We</span>
-          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Th</span>
-          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Fr</span>
-          <span class="text-[10px] font-medium" style="color: var(--text-muted);">Sa</span>
+          <span class="text-[10px] font-semibold" style="color: var(--text-muted);">Su</span>
+          <span class="text-[10px] font-semibold" style="color: var(--text-muted);">Mo</span>
+          <span class="text-[10px] font-semibold" style="color: var(--text-muted);">Tu</span>
+          <span class="text-[10px] font-semibold" style="color: var(--text-muted);">We</span>
+          <span class="text-[10px] font-semibold" style="color: var(--text-muted);">Th</span>
+          <span class="text-[10px] font-semibold" style="color: var(--text-muted);">Fr</span>
+          <span class="text-[10px] font-semibold" style="color: var(--text-muted);">Sa</span>
         </div>
         <div id="cal-grid" class="grid grid-cols-7 gap-1 mt-1"></div>
       </div>
 
-      <!-- Agenda -->
       <div class="flex-1 overflow-y-auto custom-scroll p-4">
-        <h4 class="text-xs font-semibold uppercase tracking-wider mb-3" style="color: var(--text-muted);">Agenda</h4>
-        <div id="agenda-list" class="space-y-2">
+        <h4 class="text-xs font-bold uppercase tracking-widest mb-3" style="color: var(--text-muted);">Upcoming</h4>
+        <div id="agenda-list" class="space-y-2.5">
           <p class="text-xs" style="color: var(--text-muted);">No upcoming events</p>
         </div>
       </div>
     </aside>
   </div>
 
-  <!-- ════════════════════ SETTINGS MODAL ════════════════════ -->
-  <div id="settings-modal" class="fixed inset-0 z-[100] hidden items-center justify-center" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);">
-    <div class="w-full max-w-lg mx-4 rounded-2xl border border-border-subtle shadow-2xl animate-scale-in" style="background: var(--surface-1);">
-      <!-- Header -->
-      <div class="flex items-center justify-between p-5 border-b border-border-subtle">
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="fixed inset-0 z-[100] hidden items-center justify-center" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);">
+    <div class="w-full max-w-lg mx-4 rounded-3xl glass-border shadow-2xl animate-scale-in" style="background: var(--surface-1); box-shadow: 0 24px 64px rgba(0,0,0,0.3);">
+      <div class="flex items-center justify-between p-6 border-b" style="border-color: var(--border-subtle);">
         <div>
           <h2 class="text-base font-bold" style="color: var(--text-primary);">System Prompt Settings</h2>
           <p class="text-xs mt-0.5" style="color: var(--text-muted);">Customize the AI assistant's behavior</p>
         </div>
-        <button onclick="closeSettings()" class="w-8 h-8 rounded-lg flex items-center justify-center transition-colors" style="background: var(--surface-2);">
+        <button onclick="closeSettings()" class="w-9 h-9 rounded-xl btn-ghost flex items-center justify-center">
           <svg class="w-4 h-4" style="color: var(--text-secondary);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
-      <!-- Body -->
-      <div class="p-5">
-        <label class="block text-xs font-semibold mb-2" style="color: var(--text-secondary);">Custom System Prompt</label>
-        <p class="text-[11px] mb-3" style="color: var(--text-muted);">
+      <div class="p-6">
+        <label class="block text-xs font-bold mb-2" style="color: var(--text-secondary);">Custom System Prompt</label>
+        <p class="text-[11px] mb-3 leading-relaxed" style="color: var(--text-muted);">
           Write a custom system prompt to override the default behavior. Leave empty to use the built-in calendar assistant prompt.
         </p>
         <textarea
           id="prompt-textarea"
           rows="10"
           placeholder="You are a helpful calendar assistant. You manage the user's Google Calendar by listing, creating, and deleting events. Be concise and friendly..."
-          class="w-full rounded-xl px-4 py-3 text-sm focus:outline-none resize-none custom-scroll"
-          style="background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border-subtle);"
+          class="w-full rounded-2xl px-5 py-3.5 text-sm focus:outline-none resize-none custom-scroll"
+          style="background: var(--surface-2); color: var(--text-primary); border: 1.5px solid var(--border-subtle);"
         ></textarea>
-        <div class="flex items-center justify-between mt-3">
-          <button onclick="clearPrompt()" class="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors" style="color: var(--text-muted); background: var(--surface-2);">
+        <div class="flex items-center justify-between mt-4">
+          <button onclick="clearPrompt()" class="text-xs font-medium px-4 py-2 rounded-xl btn-ghost" style="color: var(--text-muted);">
             Reset to Default
           </button>
-          <div class="flex gap-2">
-            <button onclick="closeSettings()" class="text-xs font-medium px-4 py-2 rounded-lg transition-colors" style="color: var(--text-secondary); background: var(--surface-2);">
+          <div class="flex gap-2.5">
+            <button onclick="closeSettings()" class="text-xs font-medium px-5 py-2.5 rounded-xl btn-ghost" style="color: var(--text-secondary);">
               Cancel
             </button>
-            <button onclick="savePrompt()" class="text-xs font-semibold px-4 py-2 rounded-lg transition-all" style="background: var(--accent); color: white;">
+            <button onclick="savePrompt()" class="text-xs font-semibold px-5 py-2.5 rounded-xl transition-all shadow-lg" style="background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: white;">
               Save Prompt
             </button>
           </div>
@@ -313,9 +393,8 @@
     </div>
   </div>
 
-  <!-- ════════════════════ JAVASCRIPT ════════════════════ -->
+  <!-- JAVASCRIPT -->
   <script>
-    // ── DOM refs ──
     const chatMessages = document.getElementById('chat-messages');
     const chatForm = document.getElementById('chat-form');
     const messageInput = document.getElementById('message-input');
@@ -327,7 +406,7 @@
     let authenticated = false;
     let calendarEvents = [];
 
-    // ── Theme ──
+    // Theme
     function getTheme() { return localStorage.getItem('theme') || 'dark'; }
     function setTheme(t) {
       document.documentElement.className = t;
@@ -338,7 +417,7 @@
     function toggleTheme() { setTheme(getTheme() === 'dark' ? 'light' : 'dark'); }
     setTheme(getTheme());
 
-    // ── Settings / Custom System Prompt (stored in localStorage) ──
+    // Settings
     let currentCustomPrompt = localStorage.getItem('customPrompt') || null;
 
     function openSettings() {
@@ -349,13 +428,11 @@
       modal.classList.add('flex');
       textarea.focus();
     }
-
     function closeSettings() {
       const modal = document.getElementById('settings-modal');
       modal.classList.add('hidden');
       modal.classList.remove('flex');
     }
-
     function savePrompt() {
       const textarea = document.getElementById('prompt-textarea');
       const prompt = textarea.value.trim();
@@ -372,23 +449,22 @@
         addMessage('Reset to default system prompt.', false);
       }
     }
-
     function clearPrompt() {
       document.getElementById('prompt-textarea').value = '';
       savePrompt();
     }
 
-    // ── Markdown ──
+    // Markdown
     if (typeof marked !== 'undefined') { marked.setOptions({ breaks: true, gfm: true }); }
 
-    // ── Quick actions ──
+    // Quick actions
     function sendQuick(text) {
       if (!authenticated) { window.location.href = '/auth/login'; return; }
       messageInput.value = text;
       chatForm.dispatchEvent(new Event('submit'));
     }
 
-    // ── Calendar sidebar toggle (mobile) ──
+    // Calendar sidebar toggle (mobile)
     function toggleCalendarPanel() {
       const sb = document.getElementById('calendar-sidebar');
       sb.classList.toggle('hidden');
@@ -400,17 +476,17 @@
       sb.classList.toggle('m-0');
     }
 
-    // ── Auth ──
+    // Auth
     async function checkAuth() {
       try {
         const res = await fetch('/auth/status');
         const data = await res.json();
         authenticated = data.authenticated;
         if (authenticated) {
-          statusText.textContent = 'Connected';
+          statusText.innerHTML = '<span class="inline-block w-1.5 h-1.5 rounded-full" style="background: var(--success); animation: pulseSoft 2s infinite;"></span>Connected';
           statusText.style.color = 'var(--success)';
           authStatus.innerHTML = `
-            <button onclick="disconnectCalendar()" class="h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors" style="background: var(--surface-2); color: var(--text-secondary);" title="Disconnect">
+            <button onclick="disconnectCalendar()" class="h-8 px-3 rounded-xl text-xs font-medium flex items-center gap-1.5 btn-ghost" style="background: var(--surface-2); color: var(--text-secondary);" title="Disconnect">
               <span class="w-2 h-2 rounded-full" style="background: var(--success);"></span>
               Connected
             </button>`;
@@ -420,10 +496,10 @@
           }
           loadAgenda();
         } else {
-          statusText.textContent = 'Not connected';
+          statusText.innerHTML = '<span class="inline-block w-1.5 h-1.5 rounded-full" style="background: var(--text-muted);"></span>Not connected';
           statusText.style.color = '';
           authStatus.innerHTML = `
-            <a href="/auth/login" class="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-glow" style="background: var(--accent); color: white;">
+            <a href="/auth/login" class="h-8 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-lg" style="background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: white;">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
               Connect
             </a>`;
@@ -435,7 +511,7 @@
     }
     function disconnectCalendar() { if (confirm('Disconnect from Google Calendar?')) window.location.href = '/auth/login'; }
 
-    // ── Mini Calendar ──
+    // Mini Calendar
     let calYear, calMonth;
     const now = new Date();
     calYear = now.getFullYear(); calMonth = now.getMonth();
@@ -450,11 +526,9 @@
       const daysInPrev = new Date(calYear, calMonth, 0).getDate();
       const today = new Date();
       let html = '';
-      // Previous month padding
       for (let i = firstDay - 1; i >= 0; i--) {
         html += `<div class="cal-day other-month">${daysInPrev - i}</div>`;
       }
-      // Current month
       for (let d = 1; d <= daysInMonth; d++) {
         const isToday = d === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
         const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -467,7 +541,6 @@
         if (hasEvt) classes.push('has-event');
         html += `<div class="${classes.join(' ')}" onclick="selectCalDay(${d})">${d}</div>`;
       }
-      // Next month padding
       const totalCells = firstDay + daysInMonth;
       const remaining = (7 - (totalCells % 7)) % 7;
       for (let i = 1; i <= remaining; i++) {
@@ -494,7 +567,7 @@
       }
     }
 
-    // ── Agenda ──
+    // Agenda
     async function loadAgenda() {
       if (!authenticated) return;
       try {
@@ -504,8 +577,6 @@
           body: JSON.stringify({ message: 'List my next 10 events with their IDs, titles, start times, and end times in a structured JSON format: [{"id":"...","title":"...","start":"...","end":"..."}]' }),
         });
         const data = await res.json();
-        // Try to parse events from the response for the agenda
-        // We store raw calendar events when possible
         renderAgenda();
       } catch {}
     }
@@ -522,20 +593,18 @@
         const d = new Date(start);
         const timeStr = start.includes('T') ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'All day';
         const dateStr = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        const hasRecurrence = !!(e.recurrence && e.recurrence.length);
         return `
-          <div class="p-2.5 rounded-lg border border-border-subtle transition-colors hover:border-accent/30" style="background: var(--surface-2);">
+          <div class="p-3 rounded-xl glass-border transition-all hover:border-accent/30 hover:shadow-glow" style="background: var(--surface-2); border-color: var(--border-subtle);">
             <div class="flex items-start justify-between gap-2">
-              <p class="text-xs font-medium truncate" style="color: var(--text-primary);">${escapeHtml(e.summary || 'Untitled')}</p>
-              ${hasRecurrence ? '<span class="badge badge-recurrence flex-shrink-0"><svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Repeat</span>' : ''}
+              <p class="text-xs font-semibold truncate" style="color: var(--text-primary);">${escapeHtml(e.summary || 'Untitled')}</p>
             </div>
-            <p class="text-[10px] mt-1" style="color: var(--text-muted);">${dateStr} &middot; ${timeStr}</p>
+            <p class="text-[10px] mt-1.5" style="color: var(--text-muted);">${dateStr} &middot; ${timeStr}</p>
           </div>`;
       }).join('');
       renderCalendar();
     }
 
-    // ── Chat: add message ──
+    // Chat: add message
     function addMessage(content, isUser) {
       if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) {
         welcomeScreen.classList.add('hidden');
@@ -546,20 +615,20 @@
 
       if (isUser) {
         wrapper.innerHTML = `
-          <div class="flex items-end gap-2 max-w-[80%]">
+          <div class="flex items-end gap-2.5 max-w-[80%]">
             <span class="text-[10px] mb-1 flex-shrink-0" style="color: var(--text-muted);">${time}</span>
-            <div class="rounded-2xl rounded-br-md px-4 py-2.5 shadow-sm" style="background: var(--accent); color: white;">
+            <div class="chat-bubble-user rounded-2xl rounded-br-lg px-4 py-3">
               <p class="text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(content)}</p>
             </div>
           </div>`;
       } else {
         const rendered = renderMarkdown(content);
         wrapper.innerHTML = `
-          <div class="flex items-end gap-2 max-w-[80%]">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--accent-subtle);">
-              <svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <div class="flex items-end gap-2.5 max-w-[80%]">
+            <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, var(--accent-subtle), transparent); border: 1px solid var(--border-subtle);">
+              <svg class="w-4 h-4" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             </div>
-            <div class="rounded-2xl rounded-bl-md px-4 py-2.5 shadow-sm border border-border-subtle" style="background: var(--surface-2);">
+            <div class="chat-bubble-assistant rounded-2xl rounded-bl-lg px-4 py-3">
               <div class="bubble-content text-sm leading-relaxed">${rendered}</div>
             </div>
             <span class="text-[10px] mb-1 flex-shrink-0" style="color: var(--text-muted);">${time}</span>
@@ -569,64 +638,56 @@
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // ── Event preview widget (interactive card inside chat) ──
+    // Event preview widget
     function addEventWidget(data) {
       if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) welcomeScreen.classList.add('hidden');
-
       const wrapper = document.createElement('div');
       wrapper.className = 'animate-scale-in flex justify-start';
-      wrapper.style.paddingLeft = '36px';
-
-      const hasRecurrence = data.recurrence && data.recurrence.length > 0;
-      const recLabel = hasRecurrence ? formatRRule(data.recurrence[0]) : null;
+      wrapper.style.paddingLeft = '40px';
       const start = data.start?.dateTime ? new Date(data.start.dateTime) : null;
       const end = data.end?.dateTime ? new Date(data.end.dateTime) : null;
       const dateStr = start ? start.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
       const timeStr = start ? start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + (end ? ' – ' + end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') : '';
-
       wrapper.innerHTML = `
-        <div class="event-widget max-w-sm shadow-lg">
+        <div class="event-widget max-w-sm">
           <div class="event-widget-header">
             <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full" style="background: var(--success);"></div>
-              <span class="text-xs font-semibold" style="color: var(--success);">Event Created</span>
+              <div class="w-2.5 h-2.5 rounded-full" style="background: var(--success); box-shadow: 0 0 8px var(--success);"></div>
+              <span class="text-xs font-bold" style="color: var(--success);">Event Created</span>
             </div>
             <div class="flex gap-1.5">
-              ${hasRecurrence ? `<span class="badge badge-recurrence"><svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>${escapeHtml(recLabel || 'Recurring')}</span>` : ''}
               ${data.location ? `<span class="badge badge-timezone">${escapeHtml(data.location)}</span>` : ''}
             </div>
           </div>
           <div class="event-widget-body">
-            <p class="text-sm font-semibold mb-1.5" style="color: var(--text-primary);">${escapeHtml(data.summary || 'Untitled')}</p>
+            <p class="text-sm font-bold mb-2" style="color: var(--text-primary);">${escapeHtml(data.summary || 'Untitled')}</p>
             <div class="flex items-center gap-3 text-xs" style="color: var(--text-secondary);">
-              <span class="flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${dateStr}</span>
-              <span class="flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${timeStr}</span>
+              <span class="flex items-center gap-1.5"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${dateStr}</span>
+              <span class="flex items-center gap-1.5"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${timeStr}</span>
             </div>
-            ${hasRecurrence ? `<p class="text-[11px] mt-2 px-2 py-1 rounded-md" style="background: var(--accent-subtle); color: var(--accent-text);">${escapeHtml(recLabel)}</p>` : ''}
-            ${data.description ? `<p class="text-xs mt-2" style="color: var(--text-muted);">${escapeHtml(data.description)}</p>` : ''}
+            ${data.description ? `<p class="text-xs mt-2.5" style="color: var(--text-muted);">${escapeHtml(data.description)}</p>` : ''}
           </div>
           <div class="event-widget-footer">
-            <button onclick="sendQuick('Edit event ${data.id || ''}')" class="flex-1 h-8 rounded-lg text-xs font-medium transition-colors" style="background: var(--surface-3); color: var(--text-secondary);">Edit</button>
-            <button onclick="sendQuick('Delete event ${data.id || ''}')" class="flex-1 h-8 rounded-lg text-xs font-medium transition-colors" style="background: var(--danger-subtle); color: var(--danger);">Delete</button>
+            <button onclick="sendQuick('Edit event ${data.id || ''}')" class="flex-1 h-9 rounded-xl text-xs font-semibold transition-all btn-ghost" style="background: var(--surface-3); color: var(--text-secondary);">Edit</button>
+            <button onclick="sendQuick('Delete event ${data.id || ''}')" class="flex-1 h-9 rounded-xl text-xs font-semibold transition-all btn-ghost" style="background: var(--danger-subtle); color: var(--danger);">Delete</button>
           </div>
         </div>`;
-
       chatMessages.appendChild(wrapper);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // ── Event deleted widget ──
+    // Event deleted widget
     function addDeletedWidget(title) {
       if (welcomeScreen && !welcomeScreen.classList.contains('hidden')) welcomeScreen.classList.add('hidden');
       const wrapper = document.createElement('div');
       wrapper.className = 'animate-scale-in flex justify-start';
-      wrapper.style.paddingLeft = '36px';
+      wrapper.style.paddingLeft = '40px';
       wrapper.innerHTML = `
-        <div class="event-widget max-w-sm shadow-lg" style="border-color: var(--danger-subtle);">
+        <div class="event-widget max-w-sm" style="border-color: var(--danger-subtle);">
           <div class="event-widget-header" style="background: var(--danger-subtle);">
             <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full" style="background: var(--danger);"></div>
-              <span class="text-xs font-semibold" style="color: var(--danger);">Event Deleted</span>
+              <div class="w-2.5 h-2.5 rounded-full" style="background: var(--danger); box-shadow: 0 0 8px var(--danger);"></div>
+              <span class="text-xs font-bold" style="color: var(--danger);">Event Deleted</span>
             </div>
           </div>
           <div class="event-widget-body">
@@ -637,16 +698,16 @@
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // ── Loading skeleton ──
+    // Loading
     function addLoading() {
       const el = document.createElement('div');
       el.id = 'loading';
       el.className = 'animate-fade-in flex justify-start';
       el.innerHTML = `
-        <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--accent-subtle);">
-          <svg class="w-3.5 h-3.5" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, var(--accent-subtle), transparent); border: 1px solid var(--border-subtle);">
+          <svg class="w-4 h-4" style="color: var(--accent-text);" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         </div>
-        <div class="rounded-2xl rounded-bl-md px-4 py-3 border border-border-subtle" style="background: var(--surface-2);">
+        <div class="chat-bubble-assistant rounded-2xl rounded-bl-lg px-4 py-3">
           <div class="flex items-center gap-1.5">
             <div class="w-2 h-2 rounded-full" style="background: var(--accent); animation: typing 1.4s ease-in-out infinite;"></div>
             <div class="w-2 h-2 rounded-full" style="background: var(--accent); animation: typing 1.4s ease-in-out 0.2s infinite;"></div>
@@ -658,78 +719,46 @@
     }
     function removeLoading() { document.getElementById('loading')?.remove(); }
 
-    // ── Helpers ──
+    // Helpers
     function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
     function renderMarkdown(t) { try { return typeof marked !== 'undefined' ? marked.parse(t) : escapeHtml(t); } catch { return escapeHtml(t); } }
 
-    // ── Format RRULE to human-readable string ──
-    function formatRRule(rrule) {
-      if (!rrule) return '';
-      const parts = {};
-      rrule.split(';').forEach(p => { const [k, v] = p.split('='); parts[k] = v; });
-      const freq = { DAILY: 'Daily', WEEKLY: 'Weekly', MONTHLY: 'Monthly', YEARLY: 'Yearly' }[parts.FREQ] || parts.FREQ;
-      let desc = freq;
-      if (parts.INTERVAL) desc = `Every ${parts.INTERVAL} ${parts.FREQ.toLowerCase()}s`;
-      if (parts.BYDAY) {
-        const dayNames = { MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat', SU: 'Sun' };
-        desc += ' on ' + parts.BYDAY.split(',').map(d => dayNames[d] || d).join(', ');
-      }
-      if (parts.COUNT) desc += ` (${parts.COUNT} times)`;
-      return desc;
-    }
-
-    // ── Detect event widgets in AI response ──
     function parseEventFromReply(text) {
-      // Try JSON block
       const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        try { return JSON.parse(jsonMatch[1]); } catch {}
-      }
-      // Try inline JSON
+      if (jsonMatch) { try { return JSON.parse(jsonMatch[1]); } catch {} }
       const inlineMatch = text.match(/\{[\s\S]*?"summary"[\s\S]*?\}/);
-      if (inlineMatch) {
-        try { return JSON.parse(inlineMatch[0]); } catch {}
-      }
+      if (inlineMatch) { try { return JSON.parse(inlineMatch[0]); } catch {} }
       return null;
     }
 
-    // ── Detect event creation / deletion in response ──
     function handleEventDetection(text) {
       const lower = text.toLowerCase();
-
-      // Check for event creation (structured data present)
       const eventData = parseEventFromReply(text);
       if (eventData && eventData.summary) {
         addEventWidget(eventData);
-        // Add to local agenda cache
         if (eventData.id) calendarEvents.push(eventData);
         renderAgenda();
         return true;
       }
-
-      // Check for deletion confirmation
       if (/\b(deleted|removed|cancelled)\b/.test(lower) && /\b(event|meeting)\b/.test(lower)) {
         const titleMatch = text.match(/["""]([^"""]+)["""]|deleted\s+(?:the\s+)?(?:event|meeting)\s+(?:called\s+)?(.+?)(?:\.|,|$)/i);
         const title = titleMatch?.[1] || titleMatch?.[2] || 'Event';
         addDeletedWidget(title);
         return true;
       }
-
       return false;
     }
 
-    // ── Submit handler ──
+    // Submit
     chatForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const message = messageInput.value.trim();
       if (!message) return;
-
       addMessage(message, true);
       messageInput.value = '';
       addLoading();
       sendBtn.disabled = true;
       messageInput.disabled = true;
-
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
@@ -738,9 +767,7 @@
         });
         const data = await res.json();
         removeLoading();
-
         if (data.authUrl) { window.location.href = data.authUrl; return; }
-
         const reply = data.reply || data.error || 'No response';
         if (!handleEventDetection(reply)) {
           addMessage(reply, false);
@@ -761,11 +788,9 @@
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatForm.dispatchEvent(new Event('submit')); }
     });
 
-    // ── Focus input glow ──
-    messageInput.addEventListener('focus', () => { inputWrap.style.borderColor = 'var(--accent)'; inputWrap.style.boxShadow = '0 0 0 3px var(--accent-glow)'; });
+    messageInput.addEventListener('focus', () => { inputWrap.style.borderColor = 'var(--accent)'; inputWrap.style.boxShadow = '0 0 0 3px var(--accent-glow), 0 4px 16px rgba(0,0,0,0.1)'; });
     messageInput.addEventListener('blur', () => { inputWrap.style.borderColor = ''; inputWrap.style.boxShadow = ''; });
 
-    // ── Settings modal: close on backdrop click or Escape ──
     document.getElementById('settings-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) closeSettings();
     });
@@ -773,7 +798,6 @@
       if (e.key === 'Escape') closeSettings();
     });
 
-    // ── Init ──
     checkAuth();
     renderCalendar();
   </script>
